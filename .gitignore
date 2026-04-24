@@ -87,3 +87,6 @@ yarn-error.log*
 
 # Windows NUL file
 nul
+
+# 1CliqTrade specific
+1cliqtrade/
