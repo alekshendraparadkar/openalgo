@@ -1,5 +1,7 @@
 # Load and check environment variables before anything else
-from utils.env_check import load_and_check_env_variables  # Import the environment check function
+from utils.env_check import (
+    load_and_check_env_variables,
+)  # Import the environment check function
 
 load_and_check_env_variables()
 
@@ -35,7 +37,10 @@ from blueprints.broker_credentials import (
     broker_credentials_bp,  # Import the broker credentials blueprint
 )
 from blueprints.chartink import chartink_bp  # Import the chartink blueprint
-from blueprints.strategy_portfolio import strategy_portfolio_bp  # Strategy Builder portfolio
+from blueprints.cliqtrade import cliqtrade_bp  # Import the cliqtrade blueprint
+from blueprints.strategy_portfolio import (
+    strategy_portfolio_bp,
+)  # Strategy Builder portfolio
 from blueprints.core import core_bp
 from blueprints.dashboard import dashboard_bp
 from blueprints.flow import flow_bp  # Import the flow blueprint
@@ -47,7 +52,9 @@ from blueprints.historify import historify_bp  # Import the historify blueprint
 from blueprints.ivchart import ivchart_bp  # Import the IV chart blueprint
 from blueprints.oitracker import oitracker_bp  # Import the OI tracker blueprint
 from blueprints.straddle_chart import straddle_bp  # Import the straddle chart blueprint
-from blueprints.custom_straddle import custom_straddle_bp  # Import custom straddle blueprint
+from blueprints.custom_straddle import (
+    custom_straddle_bp,
+)  # Import custom straddle blueprint
 from blueprints.vol_surface import vol_surface_bp  # Import the vol surface blueprint
 from blueprints.latency import latency_bp  # Import the latency blueprint
 from blueprints.leverage import leverage_bp  # Import the leverage blueprint
@@ -61,7 +68,10 @@ from blueprints.orders import orders_bp
 from blueprints.platforms import platforms_bp
 from blueprints.playground import playground_bp  # Import the API playground blueprint
 from blueprints.pnltracker import pnltracker_bp  # Import the pnl tracker blueprint
-from blueprints.python_strategy import python_strategy_bp, initialize_with_app_context as init_python_strategy  # Import the python strategy blueprint
+from blueprints.python_strategy import (
+    python_strategy_bp,
+    initialize_with_app_context as init_python_strategy,
+)  # Import the python strategy blueprint
 from blueprints.react_app import (  # Import React frontend blueprint
     is_react_frontend_available,
     react_bp,
@@ -78,7 +88,9 @@ from blueprints.system_permissions import (
 from blueprints.telegram import telegram_bp  # Import the telegram blueprint
 from blueprints.traffic import traffic_bp  # Import the traffic blueprint
 from blueprints.tv_json import tv_json_bp
-from blueprints.websocket_example import websocket_bp  # Import the websocket example blueprint
+from blueprints.websocket_example import (
+    websocket_bp,
+)  # Import the websocket example blueprint
 from cors import cors  # Import the CORS instance
 from csp import apply_csp_middleware  # Import the CSP middleware
 from database.action_center_db import init_db as ensure_action_center_tables_exists
@@ -109,7 +121,9 @@ from utils.logging import (  # Import centralized logging
     log_startup_banner,
 )
 from utils.plugin_loader import load_broker_auth_functions, load_broker_capabilities
-from utils.security_middleware import init_security_middleware  # Import security middleware
+from utils.security_middleware import (
+    init_security_middleware,
+)  # Import security middleware
 from utils.socketio_error_handler import (
     init_socketio_error_handling,  # Import Socket.IO error handler
 )
@@ -216,7 +230,9 @@ def create_app():
         app.register_blueprint(react_bp)
         logger.debug("React frontend enabled (frontend/dist found)")
     else:
-        logger.warning("React frontend not available - run 'npm run build' in frontend/")
+        logger.warning(
+            "React frontend not available - run 'npm run build' in frontend/"
+        )
 
     app.register_blueprint(api_v1_bp)
 
@@ -244,6 +260,7 @@ def create_app():
     app.register_blueprint(analyzer_bp)
     app.register_blueprint(settings_bp)
     app.register_blueprint(chartink_bp)
+    app.register_blueprint(cliqtrade_bp)  # Register CliqTrade blueprint
     app.register_blueprint(traffic_bp)
     app.register_blueprint(latency_bp)
     app.register_blueprint(leverage_bp)  # Register Leverage blueprint
@@ -269,9 +286,15 @@ def create_app():
     app.register_blueprint(ivsmile_bp)  # Register IV Smile blueprint
     app.register_blueprint(oiprofile_bp)  # Register OI Profile blueprint
     app.register_blueprint(flow_bp)  # Register Flow blueprint
-    app.register_blueprint(broker_credentials_bp)  # Register Broker credentials blueprint
-    app.register_blueprint(system_permissions_bp)  # Register System permissions blueprint
-    app.register_blueprint(strategy_portfolio_bp)  # Register Strategy Portfolio blueprint
+    app.register_blueprint(
+        broker_credentials_bp
+    )  # Register Broker credentials blueprint
+    app.register_blueprint(
+        system_permissions_bp
+    )  # Register System permissions blueprint
+    app.register_blueprint(
+        strategy_portfolio_bp
+    )  # Register Strategy Portfolio blueprint
 
     # Exempt webhook endpoints from CSRF protection after app initialization
     with app.app_context():
@@ -316,10 +339,7 @@ def create_app():
         from flask import request
 
         # Static assets don't need DB
-        if (
-            request.path.startswith("/static/")
-            or request.path.startswith("/assets/")
-        ):
+        if request.path.startswith("/static/") or request.path.startswith("/assets/"):
             return
 
         # Wait up to 30s for DB init (typically ~3.5s)
@@ -359,7 +379,9 @@ def create_app():
 
         # Check if user is logged in and session is expired
         if session.get("logged_in") and not is_session_valid():
-            logger.info(f"Session expired for user: {session.get('user')} - revoking tokens")
+            logger.info(
+                f"Session expired for user: {session.get('user')} - revoking tokens"
+            )
             revoke_user_tokens(revoke_db_tokens=False)
             session.clear()
             # Don't redirect here, let individual routes handle it
@@ -376,12 +398,15 @@ def create_app():
         # Check if it's a CSRF error
         if "CSRF" in error_description or "csrf" in error_description.lower():
             if request.is_json or request.path.startswith("/api"):
-                return jsonify(
-                    {
-                        "error": "CSRF validation failed",
-                        "message": "Security token expired or invalid. Please refresh the page and try again.",
-                    }
-                ), 400
+                return (
+                    jsonify(
+                        {
+                            "error": "CSRF validation failed",
+                            "message": "Security token expired or invalid. Please refresh the page and try again.",
+                        }
+                    ),
+                    400,
+                )
             else:
                 flash("Security token expired. Please try again.", "error")
                 return redirect(request.referrer or url_for("auth.login"))
@@ -406,9 +431,15 @@ def create_app():
 
         # Skip tracking for common browser/crawler requests that are not attack probes
         safe_prefixes = (
-            "/favicon", "/robots.txt", "/sitemap", "/manifest",
-            "/sw.js", "/.well-known", "/apple-touch-icon",
-            "/service-worker", "/workbox",
+            "/favicon",
+            "/robots.txt",
+            "/sitemap",
+            "/manifest",
+            "/sw.js",
+            "/.well-known",
+            "/apple-touch-icon",
+            "/service-worker",
+            "/workbox",
         )
 
         if not is_authenticated and not path.startswith(safe_prefixes):
@@ -460,7 +491,8 @@ def create_app():
 
         # Determine if webhook URL is externally accessible
         is_localhost = any(
-            local in host_server.lower() for local in ["localhost", "127.0.0.1", "0.0.0.0"]
+            local in host_server.lower()
+            for local in ["localhost", "127.0.0.1", "0.0.0.0"]
         )
 
         return jsonify({"host_server": host_server, "is_localhost": is_localhost})
@@ -524,7 +556,9 @@ def setup_environment(app):
 
             db_init_start = time.time()
             with ThreadPoolExecutor(max_workers=15) as executor:
-                futures = {executor.submit(func): name for name, func in db_init_functions}
+                futures = {
+                    executor.submit(func): name for name, func in db_init_functions
+                }
                 for future in as_completed(futures):
                     db_name = futures[future]
                     try:
@@ -533,7 +567,9 @@ def setup_environment(app):
                         logger.error(f"Failed to initialize {db_name}: {e}")
 
             db_init_time = (time.time() - db_init_start) * 1000
-            logger.debug(f"All databases initialized in parallel ({db_init_time:.0f}ms)")
+            logger.debug(
+                f"All databases initialized in parallel ({db_init_time:.0f}ms)"
+            )
 
             # Signal that DB tables are ready (unblocks cache restoration)
             app.db_ready.set()
@@ -554,7 +590,9 @@ def setup_environment(app):
                 logger.error(f"Failed to initialize Flow scheduler: {e}")
 
             try:
-                from services.historify_scheduler_service import init_historify_scheduler
+                from services.historify_scheduler_service import (
+                    init_historify_scheduler,
+                )
 
                 init_historify_scheduler(socketio=socketio)
                 logger.debug("Historify scheduler initialized")
@@ -579,6 +617,7 @@ def setup_environment(app):
 
                     def run_catchup():
                         from sandbox.position_manager import catchup_missed_settlements
+
                         catchup_missed_settlements()
                         return ("catchup_settlement", True, "Completed")
 
@@ -593,16 +632,26 @@ def setup_environment(app):
                                 service_name, success, message = future.result()
                                 if service_name == "execution_engine":
                                     if success:
-                                        logger.debug("Execution engine auto-started (Analyzer mode is ON)")
+                                        logger.debug(
+                                            "Execution engine auto-started (Analyzer mode is ON)"
+                                        )
                                     else:
-                                        logger.warning(f"Failed to auto-start execution engine: {message}")
+                                        logger.warning(
+                                            f"Failed to auto-start execution engine: {message}"
+                                        )
                                 elif service_name == "squareoff_scheduler":
                                     if success:
-                                        logger.debug("Square-off scheduler auto-started (Analyzer mode is ON)")
+                                        logger.debug(
+                                            "Square-off scheduler auto-started (Analyzer mode is ON)"
+                                        )
                                     else:
-                                        logger.warning(f"Failed to auto-start square-off scheduler: {message}")
+                                        logger.warning(
+                                            f"Failed to auto-start square-off scheduler: {message}"
+                                        )
                                 elif service_name == "catchup_settlement":
-                                    logger.debug("Catch-up settlement check completed on startup")
+                                    logger.debug(
+                                        "Catch-up settlement check completed on startup"
+                                    )
                             except Exception as e:
                                 logger.error(f"Error starting service: {e}")
             except Exception as e:
@@ -623,11 +672,17 @@ def setup_environment(app):
                         if success:
                             success, message = telegram_bot_service.start_bot()
                             if success:
-                                logger.debug(f"Telegram bot auto-started successfully: {message}")
+                                logger.debug(
+                                    f"Telegram bot auto-started successfully: {message}"
+                                )
                             else:
-                                logger.error(f"Failed to auto-start Telegram bot: {message}")
+                                logger.error(
+                                    f"Failed to auto-start Telegram bot: {message}"
+                                )
                         else:
-                            logger.error(f"Failed to initialize Telegram bot: {message}")
+                            logger.error(
+                                f"Failed to initialize Telegram bot: {message}"
+                            )
                     else:
                         import asyncio
 
@@ -646,11 +701,17 @@ def setup_environment(app):
                             if success:
                                 success, message = telegram_bot_service.start_bot()
                                 if success:
-                                    logger.debug(f"Telegram bot auto-started successfully: {message}")
+                                    logger.debug(
+                                        f"Telegram bot auto-started successfully: {message}"
+                                    )
                                 else:
-                                    logger.error(f"Failed to auto-start Telegram bot: {message}")
+                                    logger.error(
+                                        f"Failed to auto-start Telegram bot: {message}"
+                                    )
                             else:
-                                logger.error(f"Failed to initialize Telegram bot: {message}")
+                                logger.error(
+                                    f"Failed to initialize Telegram bot: {message}"
+                                )
                         except Exception as e:
                             logger.error(f"Error in Telegram bot startup: {e}")
             except Exception as e:
@@ -667,6 +728,7 @@ setup_environment(app)
 # Restore caches from database in background (not needed until first trade/lookup)
 import threading
 
+
 def _restore_caches_background():
     # Wait for DB tables to be created before querying
     app.db_ready.wait()
@@ -680,9 +742,12 @@ def _restore_caches_background():
                 symbol_count = cache_result["symbol_cache"].get("symbols_loaded", 0)
                 auth_count = cache_result["auth_cache"].get("tokens_loaded", 0)
                 if symbol_count > 0 or auth_count > 0:
-                    logger.debug(f"Cache restoration: {symbol_count} symbols, {auth_count} auth tokens")
+                    logger.debug(
+                        f"Cache restoration: {symbol_count} symbols, {auth_count} auth tokens"
+                    )
         except Exception as e:
             logger.debug(f"Cache restoration skipped: {e}")
+
 
 threading.Thread(target=_restore_caches_background, daemon=True).start()
 
@@ -722,6 +787,7 @@ def shutdown_database_sessions(exception=None):
     for module_name, session_attr in _sessions:
         try:
             import importlib
+
             mod = importlib.import_module(module_name)
             session = getattr(mod, session_attr, None)
             if session is not None:
@@ -759,9 +825,9 @@ if __name__ == "__main__":
     # Users who explicitly need debug on a trusted LAN can set
     # FLASK_DEBUG_ALLOW_EXTERNAL=true to opt out of this guard.
     _LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1", ""}
-    _allow_external_debug = os.getenv("FLASK_DEBUG_ALLOW_EXTERNAL", "False").lower() in (
-        "true", "1", "t"
-    )
+    _allow_external_debug = os.getenv(
+        "FLASK_DEBUG_ALLOW_EXTERNAL", "False"
+    ).lower() in ("true", "1", "t")
     if debug and host_ip not in _LOOPBACK_HOSTS and not _allow_external_debug:
         sys.stderr.write(
             "\n"
@@ -802,16 +868,19 @@ if __name__ == "__main__":
     }
     # Suppress Flask/Werkzeug's default startup banner — our banner replaces it
     import flask.cli
+
     flask.cli.show_server_banner = lambda *_: None
 
     # Print startup banner NOW — right before the server starts accepting connections.
     # When the user sees this banner, the portal is ready to load.
     if not debug or os.environ.get("WERKZEUG_RUN_MAIN") == "true":
         from utils.version import get_version as _get_ver
+
         _ver = _get_ver()
         _dip = host_ip
         if host_ip == "0.0.0.0":
             import socket as _sk
+
             try:
                 _s = _sk.socket(_sk.AF_INET, _sk.SOCK_DGRAM)
                 _s.connect(("8.8.8.8", 80))
@@ -822,35 +891,77 @@ if __name__ == "__main__":
         _wu = f"http://{_dip}:{port}"
         _wsu = f"ws://{_dip}:{os.getenv('WEBSOCKET_PORT', 8765)}"
         _du = "https://docs.openalgo.in"
-        G, C, M, W, Y, R, BD, DM = "\033[92m", "\033[96m", "\033[95m", "\033[97m", "\033[93m", "\033[0m", "\033[1m", "\033[2m"
+        G, C, M, W, Y, R, BD, DM = (
+            "\033[92m",
+            "\033[96m",
+            "\033[95m",
+            "\033[97m",
+            "\033[93m",
+            "\033[0m",
+            "\033[1m",
+            "\033[2m",
+        )
         _ae = re.compile(r"\x1B\[[0-9;]*m")
-        def _vl(t): return len(_ae.sub("", t))
+
+        def _vl(t):
+            return len(_ae.sub("", t))
+
         _t = f" OpenAlgo v{_ver} "
         _sl = "Your Personal Algo Trading Platform"
-        _samps = ["", _sl, f"{W}{BD}Endpoints{R}", f"{W}Web App{R}    {C}{_wu}{R}", f"{W}WebSocket{R}  {M}{_wsu}{R}", f"{W}Docs{R}       {Y}{_du}{R}", f"{W}Status{R}     {G}{BD}Ready{R}"]
+        _samps = [
+            "",
+            _sl,
+            f"{W}{BD}Endpoints{R}",
+            f"{W}Web App{R}    {C}{_wu}{R}",
+            f"{W}WebSocket{R}  {M}{_wsu}{R}",
+            f"{W}Docs{R}       {Y}{_du}{R}",
+            f"{W}Status{R}     {G}{BD}Ready{R}",
+        ]
         _iw = max(50, max((_vl(s) for s in _samps), default=0))
         _W = max(_iw + 4, len(_t) + 5)
         _enc = getattr(sys.stdout, "encoding", None) or "utf-8"
         try:
             "\u256d\u256e\u2570\u256f\u2502\u2500".encode(_enc)
-            TL, TR, BL, BR, H, V = "\u256d", "\u256e", "\u2570", "\u256f", "\u2500", "\u2502"
+            TL, TR, BL, BR, H, V = (
+                "\u256d",
+                "\u256e",
+                "\u2570",
+                "\u256f",
+                "\u2500",
+                "\u2502",
+            )
         except Exception:
             TL, TR, BL, BR, H, V = "+", "+", "+", "+", "-", "|"
+
         def _ml(t=""):
             p = max(_W - 4 - _vl(t), 0)
             return f"{C}{V}{R} {t}{' '*p} {C}{V}{R}"
+
         _slp = max((_W - 4 - _vl(_sl)) // 2, 0)
         _srp = max(_W - 4 - _vl(_sl) - _slp, 0)
         _td = max(0, _W - 5 - len(_t))
-        print("\n".join(["",
-            f"{C}{TL}{H*3}{G}{BD}{_t}{R}{C}{H*_td}{TR}{R}",
-            _ml(), f"{C}{V}{R} {' '*_slp}{DM}{_sl}{R}{' '*_srp} {C}{V}{R}", _ml(),
-            _ml(f"{W}{BD}Endpoints{R}"),
-            _ml(f"{W}Web App{R}    {C}{_wu}{R}"),
-            _ml(f"{W}WebSocket{R}  {M}{_wsu}{R}"),
-            _ml(f"{W}Docs{R}       {Y}{_du}{R}"), _ml(),
-            _ml(f"{W}Status{R}     {G}{BD}Ready{R}"), _ml(),
-            f"{C}{BL}{H*(_W-2)}{BR}{R}", "",
-        ]), flush=True)
+        print(
+            "\n".join(
+                [
+                    "",
+                    f"{C}{TL}{H*3}{G}{BD}{_t}{R}{C}{H*_td}{TR}{R}",
+                    _ml(),
+                    f"{C}{V}{R} {' '*_slp}{DM}{_sl}{R}{' '*_srp} {C}{V}{R}",
+                    _ml(),
+                    _ml(f"{W}{BD}Endpoints{R}"),
+                    _ml(f"{W}Web App{R}    {C}{_wu}{R}"),
+                    _ml(f"{W}WebSocket{R}  {M}{_wsu}{R}"),
+                    _ml(f"{W}Docs{R}       {Y}{_du}{R}"),
+                    _ml(),
+                    _ml(f"{W}Status{R}     {G}{BD}Ready{R}"),
+                    _ml(),
+                    f"{C}{BL}{H*(_W-2)}{BR}{R}",
+                    "",
+                ]
+            ),
+            flush=True,
+        )
 
-    socketio.run(app, host=host_ip, port=port, debug=debug, reloader_options=reloader_options)
+    socketio.run(
+        app, host=host_ip, port=port, debug=debug, reloader_options=reloader_options
+    )
