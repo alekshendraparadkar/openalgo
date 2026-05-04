@@ -116,8 +116,6 @@ The backend API for 1CliqTrade is now complete and accessible at `/1cliqtrade/ap
    │   └── index.ts                      (TypeScript interfaces)
    ├── services/
    │   └── cliqtradeAPI.ts               (API service)
-   ├── styles/
-   │   └── Modal1CliqTrade.module.css    (modal-specific styles)
    └── index.ts                          (export main components)
    ```
 
@@ -278,7 +276,7 @@ The backend API for 1CliqTrade is now complete and accessible at `/1cliqtrade/ap
 2. Component styling:
    - Use OpenAlgo's existing component library
    - Match OpenAlgo's theme (light/dark modes)
-   - TailwindCSS + CSS Modules for styling
+   - TailwindCSS for all styling (inline in components)
    - Ensure readability within smaller modal size
 
 3. Responsive adjustments:
@@ -321,7 +319,6 @@ All files isolated in `frontend/src/features/1cliqtrade/`:
 - `frontend/src/features/1cliqtrade/hooks/useWebSocketTrades.ts` (NEW)
 - `frontend/src/features/1cliqtrade/types/index.ts` (NEW)
 - `frontend/src/features/1cliqtrade/services/cliqtradeAPI.ts` (NEW)
-- `frontend/src/features/1cliqtrade/styles/Modal1CliqTrade.module.css` (NEW)
 - `frontend/src/features/1cliqtrade/index.ts` (NEW - exports)
 
 ### Files to Modify (MINIMAL - only additions, no breaking changes)
@@ -793,6 +790,9 @@ Add to `public/index.html` (or similar):
 
 ```tsx
 // features/1cliqtrade/components/Portal.tsx
+import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
+
 interface PortalProps {
   children: React.ReactNode;
   elementId: string;
@@ -810,29 +810,58 @@ export function Portal({ children, elementId }: PortalProps) {
   const element = document.getElementById(elementId);
   if (!element) return null;
 
-  return ReactDOM.createPortal(children, element);
+  return createPortal(children, element);
 }
 ```
 
-### Modal Component Using Portal
+### Modal Component Using Portal with TailwindCSS
 
 ```tsx
 // features/1cliqtrade/components/Modal1CliqTrade.tsx
+import { useEffect } from 'react';
 import { Portal } from './Portal';
+import { useModal1CliqTrade } from '../contexts/Modal1CliqTradeContext';
+import { ModalHeader } from './ModalHeader';
+import { TabNavigation } from './TabNavigation';
+import { Modal1CliqTradeContent } from './Modal1CliqTradeContent';
 
 export function Modal1CliqTrade() {
   const { isOpen, closeModal } = useModal1CliqTrade();
+
+  // Handle ESC key press
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) {
+        closeModal();
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('keydown', handleKeyDown);
+    }
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen, closeModal]);
 
   if (!isOpen) return null;
 
   return (
     <Portal elementId="1cliqtrade-modal-root">
-      <div className="modal-backdrop" onClick={closeModal}>
+      {/* Backdrop with blur effect */}
+      <div 
+        className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-[1000] animate-fadeIn"
+        onClick={closeModal}
+      >
+        {/* Modal container */}
         <div 
-          className="modal-container" 
+          className="bg-background border border-border rounded-lg shadow-2xl w-[1000px] h-[700px] max-w-[90vw] max-h-[90vh] flex flex-col overflow-hidden animate-slideUp"
           onClick={(e) => e.stopPropagation()}
         >
-          {/* Modal content */}
+          <ModalHeader onClose={closeModal} />
+          <TabNavigation />
+          <Modal1CliqTradeContent />
         </div>
       </div>
     </Portal>
@@ -842,147 +871,69 @@ export function Modal1CliqTrade() {
 
 ---
 
-## Styling Reference: Modal CSS
+## Styling Reference: TailwindCSS Classes
 
-```css
-/* features/1cliqtrade/styles/Modal1CliqTrade.module.css */
+**All styling is done inline using TailwindCSS classes. Here are the key classes used:**
 
-.modalBackdrop {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.3);
-  backdrop-filter: blur(5px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  animation: fadeIn 0.3s ease-in-out;
-}
+### Backdrop & Modal Container
+```tsx
+// Backdrop with blur
+className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-[1000] animate-fadeIn"
 
-.modalContainer {
-  background-color: var(--background);
-  border-radius: 12px;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
-  width: 1000px;
-  height: 700px;
-  max-width: 90vw;
-  max-height: 90vh;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  animation: slideUp 0.3s ease-in-out;
-}
+// Modal container
+className="bg-background border border-border rounded-lg shadow-2xl w-[1000px] h-[700px] max-w-[90vw] max-h-[90vh] flex flex-col overflow-hidden animate-slideUp"
+```
 
-@media (max-width: 1200px) {
-  .modalContainer {
-    width: 90vw;
-    height: 80vh;
-  }
-}
+### Header
+```tsx
+className="px-6 py-4 border-b border-border flex justify-between items-center h-[60px]"
 
-@media (max-width: 768px) {
-  .modalContainer {
-    width: 95vw;
-    height: 95vh;
-  }
-}
+// Title
+className="text-xl font-semibold"
 
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
+// Close button
+className="bg-transparent hover:bg-muted rounded p-2 cursor-pointer transition-colors"
+```
 
-@keyframes slideUp {
-  from {
-    transform: translateY(20px);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
-}
+### Tab Navigation
+```tsx
+// Tab container
+className="flex gap-4 px-6 border-b border-border overflow-x-auto"
 
-.modalHeader {
-  padding: 1.5rem;
-  border-bottom: 1px solid var(--border);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  height: 60px;
-}
+// Tab button
+className="py-4 px-5 font-medium cursor-pointer relative whitespace-nowrap hover:text-primary transition-colors"
 
-.modalTitle {
-  font-size: 1.25rem;
-  font-weight: 600;
-}
+// Active tab indicator
+className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary"
+```
 
-.closeButton {
-  background: none;
-  border: none;
-  font-size: 1.5rem;
-  cursor: pointer;
-  padding: 0.5rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 4px;
-  transition: background-color 0.2s;
-}
+### Content Area
+```tsx
+className="flex-1 overflow-y-auto px-6 py-4"
+```
 
-.closeButton:hover {
-  background-color: var(--hover-bg);
-}
-
-.tabsContainer {
-  padding: 0 1.5rem;
-  display: flex;
-  gap: 1rem;
-  border-bottom: 1px solid var(--border);
-  overflow-x: auto;
-}
-
-.tab {
-  padding: 1rem 1.25rem;
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-weight: 500;
-  position: relative;
-  white-space: nowrap;
-  transition: color 0.2s;
-}
-
-.tab:hover {
-  color: var(--primary);
-}
-
-.tab.active {
-  color: var(--primary);
-}
-
-.tab.active::after {
-  content: '';
-  position: absolute;
-  bottom: -1px;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background-color: var(--primary);
-}
-
-.content {
-  flex: 1;
-  overflow-y: auto;
-  padding: 1.5rem;
-}
+### Custom Animations (Add to tailwind.config.ts)
+```typescript
+export default {
+  theme: {
+    extend: {
+      animation: {
+        fadeIn: 'fadeIn 0.3s ease-in-out',
+        slideUp: 'slideUp 0.3s ease-in-out',
+      },
+      keyframes: {
+        fadeIn: {
+          'from': { opacity: '0' },
+          'to': { opacity: '1' },
+        },
+        slideUp: {
+          'from': { transform: 'translateY(20px)', opacity: '0' },
+          'to': { transform: 'translateY(0)', opacity: '1' },
+        },
+      },
+    },
+  },
+};
 ```
 
 ---
@@ -1037,23 +988,23 @@ Quick Access Menu:
 - Fade in/out animations: 0.3s
 
 **Modal Container:**
-- Rounded corners: `rounded-lg` or `rounded-xl`
-- Box shadow: `shadow-2xl`
-- Background: Match current theme (light/dark)
-- Border: Optional subtle border
-- Smooth animations on open/close
+- Rounded corners: `rounded-lg` (TailwindCSS)
+- Box shadow: `shadow-2xl` (TailwindCSS)
+- Background: `bg-background` (theme variable)
+- Border: `border border-border` (TailwindCSS)
+- Smooth animations: `animate-slideUp` (custom animation)
 
 **Header:**
-- Title: "1CliqTrade"
-- Close button (X) in top-right corner
+- Title: "1CliqTrade" with `text-xl font-semibold`
+- Close button (X) with `hover:bg-muted` hover state
 - Market status indicator
-- Height: ~60px
+- Height: `h-[60px]`
 
 **Tabs:**
 - 5 tabs: Positions, Orders, Trades, Holdings, Funds
-- Tab indicator/underline on active tab
-- Tab content: Scrollable if needed
-- Height: Remaining space
+- Tab indicator: `absolute bottom-0 h-0.5 bg-primary` on active tab
+- Tab content: `overflow-y-auto` for scrolling
+- Height: Flex fill with `flex-1`
 
 ### WebSocket Integration (MOST CRITICAL)
 
