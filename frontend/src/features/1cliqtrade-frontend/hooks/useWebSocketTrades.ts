@@ -3,8 +3,8 @@
  * Listens for trade execution updates and notifies when trades occur
  */
 
-import { useEffect, useState, useCallback } from 'react';
-import { useWebSocketManager } from '../../1cliqtrade/contexts/WebSocketManagerContext';
+import { useCallback } from 'react';
+import { useWebSocketManager } from '../contexts/WebSocketManagerContext';
 
 export interface TradeUpdateMessage {
   tradeid: string;
@@ -18,66 +18,23 @@ export interface TradeUpdateMessage {
 
 /**
  * Hook to listen for trade updates via WebSocket
- * Triggers a callback when trades occur
+ * Returns a function to register an update handler
  */
-export function useWebSocketTradeUpdates(
-  onUpdate?: (update: TradeUpdateMessage) => void
-) {
-  const [lastUpdate, setLastUpdate] = useState<TradeUpdateMessage | null>(null);
-  const [updateCount, setUpdateCount] = useState(0);
-  const { addMessageListener, isConnected } = useWebSocketManager();
+export function useWebSocketTradeUpdates() {
+  const { addMessageListener } = useWebSocketManager();
 
   /**
-   * Handle trade update message
+   * Register a trade update handler
+   * Returns an unsubscribe function
    */
   const handleTradeUpdate = useCallback(
-    (data: any) => {
-      const update: TradeUpdateMessage = {
-        tradeid: data.tradeid || data.trade_id || '',
-        orderid: data.orderid || data.order_id || '',
-        symbol: data.symbol || '',
-        quantity: data.quantity || 0,
-        price: data.price || 0,
-        timestamp: data.timestamp || Date.now(),
-        action: data.action || 'executed',
-      };
-
-      setLastUpdate(update);
-      setUpdateCount((prev) => prev + 1);
-
-      // Call user callback if provided
-      if (onUpdate) {
-        try {
-          onUpdate(update);
-        } catch (error) {
-          console.error('Error in trade update callback:', error);
-        }
-      }
+    (callback: (update: TradeUpdateMessage) => void): (() => void) => {
+      return addMessageListener('trade_update', callback);
     },
-    [onUpdate]
+    [addMessageListener]
   );
 
-  /**
-   * Subscribe to trade updates
-   */
-  useEffect(() => {
-    if (!isConnected) {
-      return;
-    }
-
-    try {
-      const unsubscribeListener = addMessageListener('trade_update', handleTradeUpdate);
-
-      return () => {
-        unsubscribeListener();
-      };
-    } catch (error) {
-      console.error('Error subscribing to trade updates:', error);
-    }
-  }, [isConnected, addMessageListener, handleTradeUpdate]);
-
   return {
-    lastUpdate,
-    updateCount,
+    handleTradeUpdate,
   };
 }

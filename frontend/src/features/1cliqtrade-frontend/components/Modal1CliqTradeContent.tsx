@@ -4,7 +4,7 @@
  */
 
 import { useState } from 'react';
-import { TabType } from '../types/index';
+import type { TabType } from '../types/index';
 import { TabNavigation } from './TabNavigation';
 import { PositionTable } from './PositionTable';
 import { OrderTable } from './OrderTable';

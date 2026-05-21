@@ -4,6 +4,8 @@ import type { ReactNode } from 'react'
 import { Toaster } from '@/components/ui/sonner'
 import { useAlertStore } from '@/stores/alertStore'
 import { MarketDataProvider } from '@/contexts/MarketDataContext'
+import { Modal1CliqTradeContextProvider } from '@/features/1cliqtrade-frontend/contexts/Modal1CliqTradeContext'
+import { WebSocketManagerProvider } from '@/features/1cliqtrade-frontend/contexts/WebSocketManagerContext'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -25,7 +27,11 @@ export function Providers({ children }: ProvidersProps) {
   return (
     <QueryClientProvider client={queryClient}>
       <MarketDataProvider>
-        {children}
+        <Modal1CliqTradeContextProvider>
+          <WebSocketManagerProvider>
+            {children}
+          </WebSocketManagerProvider>
+        </Modal1CliqTradeContextProvider>
       </MarketDataProvider>
       <Toaster
         position={position}

@@ -1,7 +1,8 @@
-import { BarChart3, BookOpen, FileText, MessageCircle, Search, Zap } from 'lucide-react'
+import { BarChart3, BookOpen, FileText, MessageCircle, Search, Zap, TrendingUp } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useOrderEventRefresh } from '@/hooks/useOrderEventRefresh'
+import { useModal1CliqTrade } from '@/features/1cliqtrade-frontend/contexts'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
@@ -67,6 +68,7 @@ export default function Dashboard() {
     status: 'pending',
   })
   const [isAuthenticated, setIsAuthenticated] = useState(true) // Assume authenticated initially
+  const { openModal } = useModal1CliqTrade()
 
   // Fetch dashboard funds data
   const fetchFundsData = useCallback(async () => {
@@ -194,6 +196,17 @@ export default function Dashboard() {
   }
 
   const quickAccessCards = [
+    {
+      onClick: openModal,
+      label: '1CliqTrade',
+      description: 'Quick trading interface for orders & positions',
+      icon: TrendingUp,
+      gradient: 'from-red-500/10 to-red-500/5 hover:from-red-500/20 hover:to-red-500/10',
+      iconBg: 'bg-red-500/20',
+      iconColor: 'text-red-500',
+      borderColor: 'border-red-500/20 hover:border-red-500/40',
+      isButton: true,
+    },
     {
       href: '/search',
       label: 'OpenAlgo Symbols',
@@ -431,7 +444,7 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-5">
           {quickAccessCards.map((card) => {
             const cardClasses = cn(
-              'block rounded-lg border transition-all duration-300 hover:shadow-lg',
+              'block rounded-lg border transition-all duration-300 hover:shadow-lg cursor-pointer',
               `bg-gradient-to-br ${card.gradient}`,
               card.borderColor
             )
@@ -450,11 +463,25 @@ export default function Dashboard() {
               </div>
             )
 
-            if (card.external) {
+            // Handle button type (1CliqTrade)
+            if ((card as any).isButton) {
+              return (
+                <button
+                  key={(card as any).label}
+                  onClick={(card as any).onClick}
+                  className={cardClasses}
+                >
+                  {cardContent}
+                </button>
+              )
+            }
+
+            // Handle external links
+            if ((card as any).external) {
               return (
                 <a
-                  key={card.href}
-                  href={card.href}
+                  key={(card as any).href}
+                  href={(card as any).href}
                   target="_blank"
                   rel="noopener noreferrer"
                   className={cardClasses}
@@ -464,8 +491,9 @@ export default function Dashboard() {
               )
             }
 
+            // Handle internal links
             return (
-              <Link key={card.href} to={card.href} className={cardClasses}>
+              <Link key={(card as any).href} to={(card as any).href} className={cardClasses}>
                 {cardContent}
               </Link>
             )

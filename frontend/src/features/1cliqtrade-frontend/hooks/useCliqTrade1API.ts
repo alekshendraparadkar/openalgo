@@ -6,16 +6,6 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-    Position,
-    Order,
-    Trade,
-    Holding,
-    Funds,
-    BrokerInfo,
-    MarketStatus,
-} from '../types/index';
-import {
-    cliqtradeAPI,
     positionsAPI,
     ordersAPI,
     tradesAPI,

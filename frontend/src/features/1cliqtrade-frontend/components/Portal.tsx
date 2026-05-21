@@ -3,7 +3,8 @@
  * Used for modal isolation to prevent CSS conflicts
  */
 
-import { useEffect, useState, ReactNode } from 'react';
+import { useEffect, useState } from 'react';
+import type { ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 
 interface PortalProps {

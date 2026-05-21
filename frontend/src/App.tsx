@@ -7,6 +7,7 @@ import { Layout } from '@/components/layout/Layout'
 import { PageLoader } from '@/components/ui/page-loader'
 import { usePageTitle } from '@/hooks/usePageTitle'
 import { useBrokerStore } from '@/stores/brokerStore'
+import { Modal1CliqTrade } from '@/features/1cliqtrade-frontend'
 
 // Lazy load all pages for code splitting
 // Public pages
@@ -276,6 +277,7 @@ function App() {
           </Suspense>
         </AuthSync>
       </BrowserRouter>
+      <Modal1CliqTrade />
     </Providers>
   )
 }

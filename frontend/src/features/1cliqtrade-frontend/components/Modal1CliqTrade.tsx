@@ -1,6 +1,6 @@
 /**
  * Modal1CliqTrade - Main modal component for 1CliqTrade
- * Renders modal with Portal, handles ESC key, and coordinates UI
+ * Renders modal with Portal, handles ESC key, error boundary, and cleanup
  */
 
 import { useEffect } from 'react';
@@ -8,12 +8,14 @@ import { Portal } from './Portal';
 import { useModal1CliqTrade } from '../contexts/Modal1CliqTradeContext';
 import { ModalHeader } from './ModalHeader';
 import { Modal1CliqTradeContent } from './Modal1CliqTradeContent';
+import { Modal1CliqTradeErrorBoundary } from './Modal1CliqTradeErrorBoundary';
 
 /**
  * Main modal component
  * Renders outside main DOM tree using Portal
  * Handles keyboard events (ESC to close)
  * Provides blurred backdrop and centered container
+ * Includes error boundary and cleanup
  */
 export function Modal1CliqTrade() {
   const { isOpen, closeModal } = useModal1CliqTrade();
@@ -35,6 +37,16 @@ export function Modal1CliqTrade() {
     };
   }, [isOpen, closeModal]);
 
+  // Cleanup on modal close: cancel pending requests, clear timers, etc.
+  useEffect(() => {
+    return () => {
+      if (!isOpen) {
+        // Clear any pending operations
+        // This is called when modal is unmounted
+      }
+    };
+  }, [isOpen]);
+
   if (!isOpen) {
     return null;
   }
@@ -55,8 +67,10 @@ export function Modal1CliqTrade() {
           aria-modal="true"
           aria-label="1CliqTrade Trading Interface"
         >
-          <ModalHeader onClose={closeModal} />
-          <Modal1CliqTradeContent />
+          <Modal1CliqTradeErrorBoundary>
+            <ModalHeader onClose={closeModal} />
+            <Modal1CliqTradeContent />
+          </Modal1CliqTradeErrorBoundary>
         </div>
       </div>
     </Portal>

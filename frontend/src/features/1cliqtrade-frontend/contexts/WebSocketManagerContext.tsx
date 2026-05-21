@@ -2,28 +2,33 @@
  * WebSocket Manager Context for 1CliqTrade
  * Manages WebSocket connection lifecycle and message routing
  * Handles auto-reconnect with exponential backoff
+ * INCLUDES: Comprehensive logging and error handling
  */
 
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
-import { WebSocketMessage } from '../types/index';
+import type { WebSocketMessage } from '../types/index';
+import { createLogger } from '../utils/logger';
+import { handleWebSocketError } from '../utils/errorHandler';
 
 /**
  * WebSocket connection states
  */
-enum WebSocketState {
-    DISCONNECTED = 'disconnected',
-    CONNECTING = 'connecting',
-    CONNECTED = 'connected',
-    RECONNECTING = 'reconnecting',
-    FAILED = 'failed',
-}
+const WebSocketState = {
+    DISCONNECTED: 'disconnected',
+    CONNECTING: 'connecting',
+    CONNECTED: 'connected',
+    RECONNECTING: 'reconnecting',
+    FAILED: 'failed',
+} as const;
+
+type WebSocketStateType = typeof WebSocketState[keyof typeof WebSocketState];
 
 /**
  * WebSocket Manager Context Type
  */
 interface WebSocketManagerContextType {
     isConnected: boolean;
-    state: WebSocketState;
+    state: WebSocketStateType;
     connect: () => void;
     disconnect: () => void;
     subscribe: (symbol: string) => void;
@@ -31,7 +36,7 @@ interface WebSocketManagerContextType {
     addMessageListener: (
         messageType: string,
         callback: (data: any) => void
-    ) => () => void; // Returns unsubscribe function
+    ) => () => void;
 }
 
 /**
@@ -50,78 +55,68 @@ interface WebSocketManagerProviderProps {
 }
 
 /**
+ * Constants for reconnection and heartbeat
+ */
+const MAX_RECONNECT_ATTEMPTS = 10;
+const BASE_RECONNECT_DELAY = 1000;
+const MAX_RECONNECT_DELAY = 30000;
+const HEARTBEAT_INTERVAL = 30000;
+
+/**
  * WebSocket Manager Provider Component
  */
 export function WebSocketManagerProvider({
     children,
     wsUrl = `ws://${window.location.hostname}:8765`,
 }: WebSocketManagerProviderProps) {
-    const [state, setState] = useState<WebSocketState>(WebSocketState.DISCONNECTED);
+    const [state, setState] = useState<WebSocketStateType>(WebSocketState.DISCONNECTED);
+    const logger = useRef(createLogger('WebSocketManager')).current;
     const wsRef = useRef<WebSocket | null>(null);
-    const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const reconnectAttemptsRef = useRef(0);
     const subscribedSymbolsRef = useRef<Set<string>>(new Set());
     const messageListenersRef = useRef<Map<string, Set<(data: any) => void>>>(new Map());
-    const heartbeatTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-    /**
-     * Maximum reconnection attempts before giving up
-     */
-    const MAX_RECONNECT_ATTEMPTS = 10;
-
-    /**
-     * Base delay for exponential backoff (in ms)
-     */
-    const BASE_RECONNECT_DELAY = 1000;
-
-    /**
-     * Maximum delay for exponential backoff (in ms)
-     */
-    const MAX_RECONNECT_DELAY = 30000;
-
-    /**
-     * Heartbeat interval (in ms)
-     */
-    const HEARTBEAT_INTERVAL = 30000; // 30 seconds
+    const heartbeatTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const messageCountRef = useRef<Record<string, number>>({});
+    const isExplicitlyDisconnectedRef = useRef(false);
 
     /**
      * Calculate exponential backoff delay
      */
     const getReconnectDelay = (attempts: number): number => {
         const delay = Math.min(BASE_RECONNECT_DELAY * Math.pow(2, attempts), MAX_RECONNECT_DELAY);
-        // Add random jitter to avoid thundering herd problem
         return delay + Math.random() * 1000;
     };
 
     /**
-     * Setup heartbeat mechanism
-     */
-    const setupHeartbeat = useCallback(() => {
-        if (heartbeatTimeoutRef.current) {
-            clearTimeout(heartbeatTimeoutRef.current);
-        }
-
-        heartbeatTimeoutRef.current = setTimeout(() => {
-            if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-                try {
-                    wsRef.current.send(JSON.stringify({ type: 'ping' }));
-                } catch (error) {
-                    console.error('Failed to send heartbeat ping:', error);
-                }
-            }
-            setupHeartbeat();
-        }, HEARTBEAT_INTERVAL);
-    }, []);
-
-    /**
-     * Clear heartbeat
+     * Clear heartbeat mechanism
      */
     const clearHeartbeat = useCallback(() => {
         if (heartbeatTimeoutRef.current) {
             clearTimeout(heartbeatTimeoutRef.current);
             heartbeatTimeoutRef.current = null;
+            logger.debug('💓 Heartbeat cleared');
         }
-    }, []);
+    }, [logger]);
+
+    /**
+     * Setup heartbeat mechanism
+     */
+    const setupHeartbeat = useCallback(() => {
+        clearHeartbeat();
+
+        heartbeatTimeoutRef.current = setTimeout(() => {
+            if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+                try {
+                    logger.debug('💓 Sending heartbeat ping');
+                    wsRef.current.send(JSON.stringify({ type: 'ping' }));
+                } catch (error) {
+                    logger.error('Failed to send heartbeat ping', { error: String(error) });
+                }
+            }
+            setupHeartbeat();
+        }, HEARTBEAT_INTERVAL);
+    }, [clearHeartbeat, logger]);
 
     /**
      * Handle WebSocket message
@@ -130,106 +125,85 @@ export function WebSocketManagerProvider({
         try {
             const message: WebSocketMessage = JSON.parse(event.data);
 
-            // Handle pong response
+            messageCountRef.current[message.type] = (messageCountRef.current[message.type] || 0) + 1;
+
             if (message.type === 'pong') {
-                console.debug('Received pong from server');
+                logger.debug('💓 Received pong from server');
                 return;
             }
 
-            // Route message to registered listeners
+            if (message.type === 'ltp') {
+                logger.info('📊 LTP Update received', {
+                    symbol: (message.data as any)?.symbol,
+                    ltp: (message.data as any)?.ltp,
+                    bid: (message.data as any)?.bid,
+                    ask: (message.data as any)?.ask,
+                    volume: (message.data as any)?.volume,
+                    timestamp: (message.data as any)?.timestamp,
+                    totalMessages: messageCountRef.current['ltp'],
+                });
+            } else if (message.type === 'position_update') {
+                logger.info('📈 Position Update received', {
+                    symbol: (message.data as any)?.symbol,
+                    quantity: (message.data as any)?.quantity,
+                    average_price: (message.data as any)?.average_price,
+                    ltp: (message.data as any)?.ltp,
+                    pnl: (message.data as any)?.pnl,
+                    pnl_percent: (message.data as any)?.pnl_percent,
+                    totalMessages: messageCountRef.current['position_update'],
+                });
+            } else if (message.type === 'order_update') {
+                logger.info('📝 Order Update received', {
+                    orderid: (message.data as any)?.orderid,
+                    symbol: (message.data as any)?.symbol,
+                    status: (message.data as any)?.status,
+                    quantity: (message.data as any)?.quantity,
+                    filled_quantity: (message.data as any)?.filled_quantity,
+                    totalMessages: messageCountRef.current['order_update'],
+                });
+            } else if (message.type === 'trade_update') {
+                logger.info('💰 Trade Update received', {
+                    tradeid: (message.data as any)?.tradeid,
+                    orderid: (message.data as any)?.orderid,
+                    symbol: (message.data as any)?.symbol,
+                    quantity: (message.data as any)?.quantity,
+                    price: (message.data as any)?.price,
+                    totalMessages: messageCountRef.current['trade_update'],
+                });
+            }
+
             const listeners = messageListenersRef.current.get(message.type);
-            if (listeners) {
+            if (listeners && listeners.size > 0) {
                 listeners.forEach((callback) => {
                     try {
                         callback(message.data || message);
                     } catch (error) {
-                        console.error(`Error in message listener for ${message.type}:`, error);
+                        logger.error(`Error in message listener for ${message.type}`, {
+                            error: String(error),
+                        });
                     }
                 });
             }
         } catch (error) {
-            console.error('Failed to parse WebSocket message:', error);
+            logger.error('Failed to parse WebSocket message', {
+                error: String(error),
+            });
         }
-    }, []);
-
-    /**
-     * Handle WebSocket error
-     */
-    const handleError = useCallback((event: Event) => {
-        console.error('WebSocket error:', event);
-        setState(WebSocketState.FAILED);
-    }, []);
-
-    /**
-     * Handle WebSocket close
-     */
-    const handleClose = useCallback(() => {
-        console.log('WebSocket connection closed');
-        clearHeartbeat();
-        setState(WebSocketState.DISCONNECTED);
-
-        // Attempt reconnection if not explicitly disconnected
-        if (wsRef.current !== null) {
-            // Mark as null to indicate explicit disconnection
-            // reconnection will only happen if connect() is called again
-        }
-    }, [clearHeartbeat]);
-
-    /**
-     * Connect to WebSocket
-     */
-    const connect = useCallback(() => {
-        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-            console.log('WebSocket already connected');
-            return;
-        }
-
-        if (wsRef.current && wsRef.current.readyState === WebSocket.CONNECTING) {
-            console.log('WebSocket connection already in progress');
-            return;
-        }
-
-        setState(WebSocketState.CONNECTING);
-        reconnectAttemptsRef.current = 0;
-
-        try {
-            wsRef.current = new WebSocket(wsUrl);
-            wsRef.current.onopen = () => {
-                console.log('WebSocket connected');
-                setState(WebSocketState.CONNECTED);
-                reconnectAttemptsRef.current = 0;
-                setupHeartbeat();
-
-                // Resubscribe to previously subscribed symbols
-                subscribedSymbolsRef.current.forEach((symbol) => {
-                    try {
-                        wsRef.current?.send(
-                            JSON.stringify({
-                                type: 'subscribe',
-                                symbol,
-                            })
-                        );
-                    } catch (error) {
-                        console.error(`Failed to resubscribe to ${symbol}:`, error);
-                    }
-                });
-            };
-            wsRef.current.onmessage = handleMessage;
-            wsRef.current.onerror = handleError;
-            wsRef.current.onclose = handleClose;
-        } catch (error) {
-            console.error('Failed to create WebSocket:', error);
-            setState(WebSocketState.FAILED);
-            attemptReconnect();
-        }
-    }, [wsUrl, handleMessage, handleError, handleClose, setupHeartbeat]);
+    }, [logger]);
 
     /**
      * Attempt reconnection with exponential backoff
      */
     const attemptReconnect = useCallback(() => {
+        if (isExplicitlyDisconnectedRef.current) {
+            logger.info('Reconnection skipped - manually disconnected');
+            return;
+        }
+
         if (reconnectAttemptsRef.current >= MAX_RECONNECT_ATTEMPTS) {
-            console.error('Max reconnection attempts reached, giving up');
+            logger.error('❌ Max reconnection attempts reached', {
+                attempts: reconnectAttemptsRef.current,
+            });
             setState(WebSocketState.FAILED);
             return;
         }
@@ -237,8 +211,12 @@ export function WebSocketManagerProvider({
         reconnectAttemptsRef.current += 1;
         const delay = getReconnectDelay(reconnectAttemptsRef.current - 1);
 
-        console.log(
-            `Attempting to reconnect (${reconnectAttemptsRef.current}/${MAX_RECONNECT_ATTEMPTS}) in ${delay}ms`
+        logger.warn(
+            `⏳ Attempting to reconnect (${reconnectAttemptsRef.current}/${MAX_RECONNECT_ATTEMPTS})`,
+            {
+                delayMs: Math.round(delay),
+                nextRetryIn: `${(delay / 1000).toFixed(1)}s`,
+            }
         );
 
         setState(WebSocketState.RECONNECTING);
@@ -250,13 +228,118 @@ export function WebSocketManagerProvider({
         reconnectTimeoutRef.current = setTimeout(() => {
             connect();
         }, delay);
-    }, [connect]);
+    }, [logger]);
+
+    /**
+     * Connect to WebSocket
+     */
+    const connect = useCallback(() => {
+        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+            logger.info('⚠️ WebSocket already connected');
+            return;
+        }
+
+        if (wsRef.current && wsRef.current.readyState === WebSocket.CONNECTING) {
+            logger.info('⚠️ WebSocket connection already in progress');
+            return;
+        }
+
+        logger.info('🌐 Initiating WebSocket connection', { url: wsUrl });
+        setState(WebSocketState.CONNECTING);
+        reconnectAttemptsRef.current = 0;
+        isExplicitlyDisconnectedRef.current = false;
+        messageCountRef.current = {};
+
+        try {
+            wsRef.current = new WebSocket(wsUrl);
+
+            wsRef.current.onopen = () => {
+                logger.info('✅ WebSocket connected successfully', {
+                    url: wsUrl,
+                    readyState: wsRef.current?.readyState,
+                    timestamp: new Date().toISOString(),
+                });
+                setState(WebSocketState.CONNECTED);
+                reconnectAttemptsRef.current = 0;
+                setupHeartbeat();
+
+                const symbolsArray = Array.from(subscribedSymbolsRef.current);
+                if (symbolsArray.length > 0) {
+                    logger.info(`🔄 Resubscribing to ${symbolsArray.length} symbols`, {
+                        symbols: symbolsArray,
+                    });
+
+                    symbolsArray.forEach((symbol) => {
+                        try {
+                            wsRef.current?.send(
+                                JSON.stringify({
+                                    type: 'subscribe',
+                                    symbol,
+                                })
+                            );
+                            logger.debug(`✅ Subscribed to symbol: ${symbol}`);
+                        } catch (error) {
+                            logger.error(`Failed to resubscribe to ${symbol}`, {
+                                error: String(error),
+                            });
+                        }
+                    });
+                }
+            };
+
+            wsRef.current.onmessage = handleMessage;
+
+            wsRef.current.onerror = () => {
+                const error = { name: 'WebSocketError' };
+                const { userMessage, shouldReconnect } = handleWebSocketError(error, {
+                    operation: 'connection',
+                    wsUrl,
+                });
+
+                logger.error('🔴 WebSocket error occurred', {
+                    timestamp: new Date().toISOString(),
+                    userMessage,
+                    shouldReconnect,
+                });
+                setState(WebSocketState.FAILED);
+
+                if (shouldReconnect) {
+                    attemptReconnect();
+                }
+            };
+
+            wsRef.current.onclose = () => {
+                logger.info('🔌 WebSocket connection closed', {
+                    subscribedSymbols: Array.from(subscribedSymbolsRef.current),
+                    messageStats: messageCountRef.current,
+                });
+                clearHeartbeat();
+                setState(WebSocketState.DISCONNECTED);
+
+                if (!isExplicitlyDisconnectedRef.current) {
+                    attemptReconnect();
+                }
+            };
+        } catch (error) {
+            logger.error('❌ Failed to create WebSocket', {
+                error: String(error),
+                url: wsUrl,
+            });
+            setState(WebSocketState.FAILED);
+            attemptReconnect();
+        }
+    }, [wsUrl, handleMessage, setupHeartbeat, clearHeartbeat, attemptReconnect, logger]);
 
     /**
      * Disconnect from WebSocket
      */
     const disconnect = useCallback(() => {
-        console.log('Disconnecting WebSocket');
+        logger.info('🛑 Disconnecting WebSocket', {
+            subscribedSymbols: Array.from(subscribedSymbolsRef.current),
+            messageStats: messageCountRef.current,
+        });
+
+        isExplicitlyDisconnectedRef.current = true;
 
         if (reconnectTimeoutRef.current) {
             clearTimeout(reconnectTimeoutRef.current);
@@ -266,7 +349,7 @@ export function WebSocketManagerProvider({
         clearHeartbeat();
 
         if (wsRef.current) {
-            wsRef.current.onclose = null; // Prevent auto-reconnect on manual disconnect
+            wsRef.current.onclose = null;
             wsRef.current.close();
             wsRef.current = null;
         }
@@ -274,61 +357,64 @@ export function WebSocketManagerProvider({
         subscribedSymbolsRef.current.clear();
         messageListenersRef.current.clear();
         setState(WebSocketState.DISCONNECTED);
-    }, [clearHeartbeat]);
+
+        logger.info('✅ WebSocket disconnected successfully');
+    }, [clearHeartbeat, logger]);
 
     /**
      * Subscribe to symbol
      */
-    const subscribe = useCallback(
-        (symbol: string) => {
-            if (!symbol) return;
+    const subscribe = useCallback((symbol: string) => {
+        if (!symbol) return;
 
-            subscribedSymbolsRef.current.add(symbol);
+        subscribedSymbolsRef.current.add(symbol);
+        logger.info(`📌 Subscribed to symbol: ${symbol}`, {
+            totalSubscriptions: subscribedSymbolsRef.current.size,
+        });
 
-            if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-                try {
-                    wsRef.current.send(
-                        JSON.stringify({
-                            type: 'subscribe',
-                            symbol,
-                        })
-                    );
-                } catch (error) {
-                    console.error(`Failed to subscribe to ${symbol}:`, error);
-                }
+        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+            try {
+                wsRef.current.send(
+                    JSON.stringify({
+                        type: 'subscribe',
+                        symbol,
+                    })
+                );
+                logger.debug(`Send subscribe message for: ${symbol}`);
+            } catch (error) {
+                logger.error(`Failed to subscribe to ${symbol}`, { error: String(error) });
             }
-        },
-        []
-    );
+        }
+    }, [logger]);
 
     /**
      * Unsubscribe from symbol
      */
-    const unsubscribe = useCallback(
-        (symbol: string) => {
-            if (!symbol) return;
+    const unsubscribe = useCallback((symbol: string) => {
+        if (!symbol) return;
 
-            subscribedSymbolsRef.current.delete(symbol);
+        subscribedSymbolsRef.current.delete(symbol);
+        logger.info(`🗑️ Unsubscribed from symbol: ${symbol}`, {
+            remainingSubscriptions: subscribedSymbolsRef.current.size,
+        });
 
-            if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-                try {
-                    wsRef.current.send(
-                        JSON.stringify({
-                            type: 'unsubscribe',
-                            symbol,
-                        })
-                    );
-                } catch (error) {
-                    console.error(`Failed to unsubscribe from ${symbol}:`, error);
-                }
+        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+            try {
+                wsRef.current.send(
+                    JSON.stringify({
+                        type: 'unsubscribe',
+                        symbol,
+                    })
+                );
+                logger.debug(`Send unsubscribe message for: ${symbol}`);
+            } catch (error) {
+                logger.error(`Failed to unsubscribe from ${symbol}`, { error: String(error) });
             }
-        },
-        []
-    );
+        }
+    }, [logger]);
 
     /**
      * Add message listener
-     * Returns a function to remove the listener
      */
     const addMessageListener = useCallback(
         (messageType: string, callback: (data: any) => void): (() => void) => {
@@ -339,25 +425,33 @@ export function WebSocketManagerProvider({
             const listeners = messageListenersRef.current.get(messageType)!;
             listeners.add(callback);
 
-            // Return unsubscribe function
+            logger.debug(`Registered listener for message type: ${messageType}`, {
+                totalListeners: listeners.size,
+            });
+
             return () => {
                 listeners.delete(callback);
+                logger.debug(`Unregistered listener for message type: ${messageType}`, {
+                    remainingListeners: listeners.size,
+                });
                 if (listeners.size === 0) {
                     messageListenersRef.current.delete(messageType);
                 }
             };
         },
-        []
+        [logger]
     );
 
     /**
      * Cleanup on unmount
      */
     useEffect(() => {
+        logger.info('WebSocketManagerProvider mounted');
         return () => {
+            logger.info('WebSocketManagerProvider unmounting, cleaning up...');
             disconnect();
         };
-    }, [disconnect]);
+    }, [disconnect, logger]);
 
     const contextValue: WebSocketManagerContextType = {
         isConnected: state === WebSocketState.CONNECTED,

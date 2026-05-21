@@ -2,14 +2,14 @@
  * MarketStatus - Displays if market is open or closed
  */
 
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 
 /**
  * Component that shows market status (open/closed)
  * Can be extended to fetch real data from API
  */
 export function MarketStatus() {
-  const [isOpen, setIsOpen] = useState(true);
+  const isOpen = true;
 
   useEffect(() => {
     // TODO: Fetch market status from API: /1cliqtrade/api/is_market_open

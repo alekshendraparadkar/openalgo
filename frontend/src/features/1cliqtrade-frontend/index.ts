@@ -5,9 +5,11 @@
 
 // Contexts
 export { Modal1CliqTradeContextProvider, useModal1CliqTrade } from './contexts/Modal1CliqTradeContext';
+export { WebSocketManagerProvider, useWebSocketManager } from './contexts/WebSocketManagerContext';
 
 // Components
 export { Modal1CliqTrade } from './components/Modal1CliqTrade';
+export { Modal1CliqTradeErrorBoundary } from './components/Modal1CliqTradeErrorBoundary';
 export { Portal } from './components/Portal';
 export { ModalHeader } from './components/ModalHeader';
 export { TabNavigation } from './components/TabNavigation';

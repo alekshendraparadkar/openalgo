@@ -2,9 +2,16 @@
  * 1CliqTrade API Service
  * Wrapper functions for all 1CliqTrade backend endpoints
  * Base URL: /1cliqtrade/api/
+ * INCLUDES: Comprehensive logging for API call debugging
  */
 
-import {
+/**
+ * 1CliqTrade API Service
+ * Wrapper functions for all 1CliqTrade backend endpoints
+ * Base URL: /1cliqtrade/api/
+ * INCLUDES: Comprehensive logging for API call debugging
+ */
+import type {
     ApiResponse,
     Position,
     Order,
@@ -14,9 +21,11 @@ import {
     BrokerInfo,
     MarketStatus,
 } from '../types/index';
+import { createLogger } from '../utils/logger';
 
 // Base configuration
 const API_BASE_URL = '/1cliqtrade/api';
+const logger = createLogger('CliqTradeAPI');
 
 /**
  * Helper function to make API requests with proper error handling
@@ -25,8 +34,16 @@ async function apiRequest<T>(
     endpoint: string,
     options: RequestInit = {}
 ): Promise<ApiResponse<T>> {
+    const startTime = performance.now();
+    const method = options.method || 'GET';
+
     try {
         const url = `${API_BASE_URL}${endpoint}`;
+
+        logger.info(`📡 API Request: ${method} ${endpoint}`, {
+            url,
+            timestamp: new Date().toISOString(),
+        });
 
         // Add default headers
         const headers: HeadersInit = {
@@ -35,10 +52,11 @@ async function apiRequest<T>(
         };
 
         // Add CSRF token if available (for POST/PUT/DELETE requests)
-        if (['POST', 'PUT', 'DELETE'].includes(options.method || 'GET')) {
+        if (['POST', 'PUT', 'DELETE'].includes(method)) {
             const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
             if (csrfToken) {
-                headers['X-CSRF-Token'] = csrfToken;
+                (headers as Record<string, string>)['X-CSRF-Token'] = csrfToken;
+                logger.debug('CSRF token added to request headers');
             }
         }
 
@@ -48,10 +66,14 @@ async function apiRequest<T>(
             credentials: 'include', // Include cookies for session validation
         });
 
+        const duration = (performance.now() - startTime).toFixed(2);
+
         // Handle session expiration (401)
         if (response.status === 401) {
-            console.warn('Session expired, redirecting to login');
-            // TODO: Redirect to login page or emit session expiration event
+            logger.warn('❌ Session expired (401)', {
+                endpoint,
+                duration: `${duration}ms`,
+            });
             return {
                 status: 'error',
                 message: 'Session expired. Please login again.',
@@ -60,6 +82,10 @@ async function apiRequest<T>(
 
         // Handle forbidden (403)
         if (response.status === 403) {
+            logger.warn('❌ Forbidden (403)', {
+                endpoint,
+                duration: `${duration}ms`,
+            });
             return {
                 status: 'error',
                 message: 'Forbidden: You do not have permission to access this resource.',
@@ -68,6 +94,11 @@ async function apiRequest<T>(
 
         // Handle server errors (500+)
         if (response.status >= 500) {
+            logger.error('❌ Server error (500+)', {
+                endpoint,
+                status: response.status,
+                duration: `${duration}ms`,
+            });
             return {
                 status: 'error',
                 message: 'Server error. Please try again later.',
@@ -77,18 +108,36 @@ async function apiRequest<T>(
         const data = await response.json();
 
         if (!response.ok) {
+            logger.warn('❌ API request failed (not OK)', {
+                endpoint,
+                status: response.status,
+                message: data.message,
+                duration: `${duration}ms`,
+            });
             return {
                 status: 'error',
                 message: data.message || 'An error occurred',
             };
         }
 
+        logger.info(`✅ API Request Success: ${method} ${endpoint}`, {
+            status: response.status,
+            duration: `${duration}ms`,
+            dataSize: JSON.stringify(data).length,
+        });
+
         return {
             status: 'success',
             data: data.data || data,
         };
     } catch (error) {
-        console.error('API request failed:', error);
+        const duration = (performance.now() - startTime).toFixed(2);
+        logger.error('❌ API request failed with exception', {
+            endpoint,
+            method,
+            error: String(error),
+            duration: `${duration}ms`,
+        });
         return {
             status: 'error',
             message: error instanceof Error ? error.message : 'An unknown error occurred',

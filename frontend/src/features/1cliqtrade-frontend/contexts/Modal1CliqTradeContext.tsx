@@ -3,8 +3,9 @@
  * Provides hooks for opening and closing the 1CliqTrade modal
  */
 
-import { createContext, useContext, useState, ReactNode, useCallback } from 'react';
-import { Modal1CliqTradeContextType } from '../types/index';
+import { createContext, useContext, useState, useCallback } from 'react';
+import type { ReactNode } from 'react';
+import type { Modal1CliqTradeContextType } from '../types/index';
 
 const Modal1CliqTradeContext = createContext<Modal1CliqTradeContextType | undefined>(undefined);
 

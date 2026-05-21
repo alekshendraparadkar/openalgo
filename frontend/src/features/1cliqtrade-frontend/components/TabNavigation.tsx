@@ -3,7 +3,8 @@
  * Displays 5 tabs: Positions, Orders, Trades, Holdings, Funds
  */
 
-import { TabType, TABS, TAB_LABELS } from '../types/index';
+import type { TabType } from '../types/index';
+import { TABS, TAB_LABELS } from '../types/index';
 
 interface TabNavigationProps {
   activeTab: TabType;
@@ -21,8 +22,8 @@ export function TabNavigation({ activeTab, onTabChange }: TabNavigationProps) {
           key={tab}
           onClick={() => onTabChange(tab)}
           className={`py-4 px-5 font-medium cursor-pointer relative whitespace-nowrap transition-colors ${activeTab === tab
-              ? 'text-primary'
-              : 'text-muted-foreground hover:text-primary'
+            ? 'text-primary'
+            : 'text-muted-foreground hover:text-primary'
             }`}
         >
           {TAB_LABELS[tab]}

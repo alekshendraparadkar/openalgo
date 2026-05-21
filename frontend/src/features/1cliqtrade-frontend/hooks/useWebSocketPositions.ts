@@ -3,7 +3,7 @@
  * Listens for position changes and notifies when positions are updated
  */
 
-import { useEffect, useState, useCallback } from 'react';
+import { useCallback } from 'react';
 import { useWebSocketManager } from '../contexts/WebSocketManagerContext';
 
 export interface PositionUpdateMessage {
@@ -18,66 +18,23 @@ export interface PositionUpdateMessage {
 
 /**
  * Hook to listen for position updates via WebSocket
- * Triggers a callback when positions are updated
+ * Returns a function to register an update handler
  */
-export function useWebSocketPositionUpdates(
-    onUpdate?: (update: PositionUpdateMessage) => void
-) {
-    const [lastUpdate, setLastUpdate] = useState<PositionUpdateMessage | null>(null);
-    const [updateCount, setUpdateCount] = useState(0);
-    const { addMessageListener, isConnected } = useWebSocketManager();
+export function useWebSocketPositionUpdates() {
+    const { addMessageListener } = useWebSocketManager();
 
     /**
-     * Handle position update message
+     * Register a position update handler
+     * Returns an unsubscribe function
      */
     const handlePositionUpdate = useCallback(
-        (data: any) => {
-            const update: PositionUpdateMessage = {
-                symbol: data.symbol,
-                quantity: data.quantity || 0,
-                average_price: data.average_price || 0,
-                ltp: data.ltp || 0,
-                pnl: data.pnl || 0,
-                pnl_percent: data.pnl_percent || 0,
-                timestamp: data.timestamp || Date.now(),
-            };
-
-            setLastUpdate(update);
-            setUpdateCount((prev) => prev + 1);
-
-            // Call user callback if provided
-            if (onUpdate) {
-                try {
-                    onUpdate(update);
-                } catch (error) {
-                    console.error('Error in position update callback:', error);
-                }
-            }
+        (callback: (update: PositionUpdateMessage) => void): (() => void) => {
+            return addMessageListener('position_update', callback);
         },
-        [onUpdate]
+        [addMessageListener]
     );
 
-    /**
-     * Subscribe to position updates
-     */
-    useEffect(() => {
-        if (!isConnected) {
-            return;
-        }
-
-        try {
-            const unsubscribeListener = addMessageListener('position_update', handlePositionUpdate);
-
-            return () => {
-                unsubscribeListener();
-            };
-        } catch (error) {
-            console.error('Error subscribing to position updates:', error);
-        }
-    }, [isConnected, addMessageListener, handlePositionUpdate]);
-
     return {
-        lastUpdate,
-        updateCount,
+        handlePositionUpdate,
     };
 }

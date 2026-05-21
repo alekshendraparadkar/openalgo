@@ -108,7 +108,7 @@ export interface MarketStatus {
 }
 
 // WebSocket Message Types
-export type WebSocketMessageType = 'ltp' | 'position_update' | 'order_update' | 'trade_update';
+export type WebSocketMessageType = 'ltp' | 'position_update' | 'order_update' | 'trade_update' | 'pong' | 'error';
 
 export interface WebSocketMessage {
   type: WebSocketMessageType;
