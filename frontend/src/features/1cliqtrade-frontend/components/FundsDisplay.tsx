@@ -43,7 +43,15 @@ export function FundsDisplay() {
     );
   }
 
-  const marginUsagePercent = (localFunds.usedMargin / localFunds.totalMargin) * 100;
+  // Provide default values with fallback to 0, ensure they're numbers
+  const safeAvailableCash = Number((localFunds as any)?.availableCash ?? 0) || 0;
+  const safeTotalMargin = Number((localFunds as any)?.totalMargin ?? 0) || 0;
+  const safeUsedMargin = Number((localFunds as any)?.usedMargin ?? 0) || 0;
+  const safeAvailableMargin = Number((localFunds as any)?.availableMargin ?? 0) || 0;
+  const safePnl = Number((localFunds as any)?.pnl ?? 0) || 0;
+  const safeCollateral = Number((localFunds as any)?.collateral ?? 0) || 0;
+
+  const marginUsagePercent = safeTotalMargin > 0 ? (safeUsedMargin / safeTotalMargin) * 100 : 0;
 
   return (
     <div className="flex-1 overflow-y-auto p-4">
@@ -53,7 +61,7 @@ export function FundsDisplay() {
           <div className="space-y-3">
             <div className="flex justify-between items-center">
               <span className="text-sm">Available Cash</span>
-              <span className="font-semibold">₹{localFunds.availableCash.toFixed(2)}</span>
+              <span className="font-semibold">₹{safeAvailableCash.toFixed(2)}</span>
             </div>
           </div>
         </div>
@@ -63,15 +71,15 @@ export function FundsDisplay() {
           <div className="space-y-3">
             <div className="flex justify-between items-center">
               <span className="text-sm">Total Margin</span>
-              <span className="font-semibold">₹{localFunds.totalMargin.toFixed(2)}</span>
+              <span className="font-semibold">₹{safeTotalMargin.toFixed(2)}</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-sm">Used Margin</span>
-              <span className="font-semibold text-orange-600">₹{localFunds.usedMargin.toFixed(2)}</span>
+              <span className="font-semibold text-orange-600">₹{safeUsedMargin.toFixed(2)}</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-sm">Available Margin</span>
-              <span className="font-semibold text-green-600">₹{localFunds.availableMargin.toFixed(2)}</span>
+              <span className="font-semibold text-green-600">₹{safeAvailableMargin.toFixed(2)}</span>
             </div>
             <div className="mt-4">
               <div className="flex justify-between items-center mb-2">
@@ -90,7 +98,7 @@ export function FundsDisplay() {
           <div className="space-y-3">
             <div className="flex justify-between items-center">
               <span className="text-sm">Total P&L</span>
-              <span className={cn('font-semibold text-lg', localFunds.pnl >= 0 ? 'text-green-600' : 'text-red-600')}>₹{localFunds.pnl.toFixed(2)}</span>
+              <span className={cn('font-semibold text-lg', safePnl >= 0 ? 'text-green-600' : 'text-red-600')}>₹{safePnl.toFixed(2)}</span>
             </div>
           </div>
         </div>
@@ -100,7 +108,7 @@ export function FundsDisplay() {
           <div className="space-y-3">
             <div className="flex justify-between items-center">
               <span className="text-sm">Collateral Value</span>
-              <span className="font-semibold">₹{localFunds.collateral.toFixed(2)}</span>
+              <span className="font-semibold">₹{safeCollateral.toFixed(2)}</span>
             </div>
           </div>
         </div>

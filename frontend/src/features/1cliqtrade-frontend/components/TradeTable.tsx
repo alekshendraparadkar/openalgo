@@ -85,15 +85,18 @@ export function TradeTable() {
             <tr><th className="text-left py-2 px-3 font-semibold">Symbol</th><th className="text-center py-2 px-3 font-semibold">Action</th><th className="text-right py-2 px-3 font-semibold">Qty</th><th className="text-right py-2 px-3 font-semibold">Fill Price</th><th className="text-left py-2 px-3 font-semibold">Time</th></tr>
           </thead>
           <tbody>
-            {localTrades.map((trade) => (
-              <tr key={trade.tradeId} className={cn('border-b border-border hover:bg-muted/50 transition-colors', newTradeIds.has(trade.tradeId) && 'animate-pulse bg-green-50 dark:bg-green-950/20')}>
-                <td className="py-2 px-3 font-medium">{trade.symbol}</td>
-                <td className="text-center py-2 px-3"><span className={`px-2 py-1 rounded text-xs font-semibold ${trade.action === 'BUY' ? 'text-green-600' : 'text-red-600'}`}>{trade.action}</span></td>
-                <td className="text-right py-2 px-3">{trade.filledQuantity}</td>
-                <td className="text-right py-2 px-3 font-medium">₹{trade.fillPrice.toFixed(2)}</td>
-                <td className="text-left py-2 px-3 text-xs text-muted-foreground">{new Date(trade.timestamp * 1000).toLocaleTimeString()}</td>
-              </tr>
-            ))}
+            {localTrades.map((trade) => {
+              const safeFillPrice = Number(trade.fillPrice ?? 0) || 0;
+              return (
+                <tr key={trade.tradeId} className={cn('border-b border-border hover:bg-muted/50 transition-colors', newTradeIds.has(trade.tradeId) && 'animate-pulse bg-green-50 dark:bg-green-950/20')}>
+                  <td className="py-2 px-3 font-medium">{trade.symbol}</td>
+                  <td className="text-center py-2 px-3"><span className={`px-2 py-1 rounded text-xs font-semibold ${trade.action === 'BUY' ? 'text-green-600' : 'text-red-600'}`}>{trade.action}</span></td>
+                  <td className="text-right py-2 px-3">{trade.filledQuantity}</td>
+                  <td className="text-right py-2 px-3 font-medium">₹{safeFillPrice.toFixed(2)}</td>
+                  <td className="text-left py-2 px-3 text-xs text-muted-foreground">{new Date(trade.timestamp * 1000).toLocaleTimeString()}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

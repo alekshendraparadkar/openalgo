@@ -67,15 +67,15 @@ export function PositionTable() {
     );
   }
 
-  const totalPnL = localPositions.reduce((sum, pos) => sum + (pos.pnl || 0), 0);
-  const totalValue = localPositions.reduce((sum, pos) => sum + (pos.quantity * pos.ltp), 0);
+  const safeTotalPnL = Number(localPositions.reduce((sum, pos) => sum + (Number(pos.pnl ?? 0) || 0), 0) || 0);
+  const safeTotalValue = Number(localPositions.reduce((sum, pos) => sum + ((Number(pos.quantity ?? 0) || 0) * (Number(pos.ltp ?? 0) || 0)), 0) || 0);
 
   return (
     <div className="flex-1 overflow-hidden flex flex-col">
       <div className="border-b border-border px-4 py-3 bg-muted/50">
         <div className="grid grid-cols-3 gap-4 text-xs">
-          <div><p className="text-muted-foreground mb-1">Total Value</p><p className="font-semibold">₹{totalValue.toFixed(2)}</p></div>
-          <div><p className="text-muted-foreground mb-1">Portfolio P&L</p><p className={cn('font-semibold', totalPnL >= 0 ? 'text-green-600' : 'text-red-600')}>₹{totalPnL.toFixed(2)}</p></div>
+          <div><p className="text-muted-foreground mb-1">Total Value</p><p className="font-semibold">₹{safeTotalValue.toFixed(2)}</p></div>
+          <div><p className="text-muted-foreground mb-1">Portfolio P&L</p><p className={cn('font-semibold', safeTotalPnL >= 0 ? 'text-green-600' : 'text-red-600')}>₹{safeTotalPnL.toFixed(2)}</p></div>
           <div><p className="text-muted-foreground mb-1">Positions</p><p className="font-semibold">{localPositions.length}</p></div>
         </div>
       </div>
@@ -85,12 +85,18 @@ export function PositionTable() {
             <tr><th className="text-left py-2 px-3 font-semibold">Symbol</th><th className="text-right py-2 px-3 font-semibold">Qty</th><th className="text-right py-2 px-3 font-semibold">Avg Price</th><th className="text-right py-2 px-3 font-semibold">LTP</th><th className="text-right py-2 px-3 font-semibold">P&L</th></tr>
           </thead>
           <tbody>
-            {localPositions.map((pos) => (
-              <tr key={pos.symbol} className={cn('border-b border-border hover:bg-muted/50 transition-colors', updating.has(pos.symbol) && 'animate-pulse bg-yellow-50 dark:bg-yellow-950/20')}>
-                <td className="py-2 px-3 font-medium">{pos.symbol}</td><td className="text-right py-2 px-3">{pos.quantity}</td><td className="text-right py-2 px-3">₹{pos.averagePrice.toFixed(2)}</td><td className="text-right py-2 px-3 font-medium">₹{pos.ltp.toFixed(2)}</td>
-                <td className={cn('text-right py-2 px-3 font-semibold', pos.pnl >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400')}>₹{pos.pnl.toFixed(2)} ({pos.pnlPercent.toFixed(2)}%)</td>
-              </tr>
-            ))}
+            {localPositions.map((pos) => {
+              const safeAvgPrice = Number(pos.averagePrice ?? 0) || 0;
+              const safeLtp = Number(pos.ltp ?? 0) || 0;
+              const safePnl = Number(pos.pnl ?? 0) || 0;
+              const safePnlPercent = Number(pos.pnlPercent ?? 0) || 0;
+              return (
+                <tr key={pos.symbol} className={cn('border-b border-border hover:bg-muted/50 transition-colors', updating.has(pos.symbol) && 'animate-pulse bg-yellow-50 dark:bg-yellow-950/20')}>
+                  <td className="py-2 px-3 font-medium">{pos.symbol}</td><td className="text-right py-2 px-3">{pos.quantity}</td><td className="text-right py-2 px-3">₹{safeAvgPrice.toFixed(2)}</td><td className="text-right py-2 px-3 font-medium">₹{safeLtp.toFixed(2)}</td>
+                  <td className={cn('text-right py-2 px-3 font-semibold', safePnl >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400')}>₹{safePnl.toFixed(2)} ({safePnlPercent.toFixed(2)}%)</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

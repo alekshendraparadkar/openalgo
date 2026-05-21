@@ -180,7 +180,65 @@ def funds_tab():
         logger.error(f"Failed to get margin data for user {login_username}")
         return redirect(url_for("auth.logout"))
 
-    return jsonify(margin_data)
+    # Transform segment-based data to flat structure
+    # Handle both formats: nested (commodity/equity) and flat
+    funds_response = _transform_funds_data(margin_data)
+
+    return jsonify(
+        {
+            "status": "success",
+            "message": "Funds fetched successfully",
+            "data": funds_response,
+        }
+    )
+
+
+def _transform_funds_data(margin_data: dict) -> dict:
+    """Transform broker margin data to frontend format"""
+    # If already in flat format, return as-is
+    if "availableCash" in margin_data or "available_margin" in margin_data:
+        return {
+            "availableCash": margin_data.get("availableCash")
+            or margin_data.get("payin_amount", 0),
+            "usedMargin": margin_data.get("usedMargin")
+            or margin_data.get("used_margin", 0),
+            "availableMargin": margin_data.get("availableMargin")
+            or margin_data.get("available_margin", 0),
+            "totalMargin": margin_data.get("totalMargin")
+            or margin_data.get("span_margin", 0),
+            "pnl": margin_data.get("pnl", 0),
+            "collateral": margin_data.get("collateral")
+            or margin_data.get("notional_cash", 0),
+        }
+
+    # If segmented by commodity/equity, aggregate
+    commodity = margin_data.get("commodity", {})
+    equity = margin_data.get("equity", {})
+
+    available_cash = (commodity.get("payin_amount", 0) or 0) + (
+        equity.get("payin_amount", 0) or 0
+    )
+    used_margin = (commodity.get("used_margin", 0) or 0) + (
+        equity.get("used_margin", 0) or 0
+    )
+    available_margin = (commodity.get("available_margin", 0) or 0) + (
+        equity.get("available_margin", 0) or 0
+    )
+    total_margin = (commodity.get("span_margin", 0) or 0) + (
+        equity.get("span_margin", 0) or 0
+    )
+    collateral = (commodity.get("notional_cash", 0) or 0) + (
+        equity.get("notional_cash", 0) or 0
+    )
+
+    return {
+        "availableCash": float(available_cash),
+        "usedMargin": float(used_margin),
+        "availableMargin": float(available_margin),
+        "totalMargin": float(total_margin),
+        "pnl": 0.0,  # PnL not available in margin data, calculated separately
+        "collateral": float(collateral),
+    }
 
 
 @api_bp.route("/positions_tab")
@@ -393,9 +451,14 @@ def holdings_tab():
 
     data = response.get("data", {})
     holdings_data = data.get("holdings", [])
-    portfolio_stats = data.get("statistics", {})
 
-    return jsonify({"holdings_data": holdings_data, "portfolio_stats": portfolio_stats})
+    return jsonify(
+        {
+            "status": "success",
+            "message": "Holdings fetched successfully",
+            "data": holdings_data,
+        }
+    )
 
 
 @api_bp.route("/broker-info")

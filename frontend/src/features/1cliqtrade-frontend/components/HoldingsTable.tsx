@@ -19,8 +19,8 @@ export function HoldingsTable() {
     setLocalHoldings(holdings);
   }, [holdings]);
 
-  const totalValue = localHoldings.reduce((sum, h) => sum + h.totalValue, 0);
-  const totalPnL = localHoldings.reduce((sum, h) => sum + h.pnl, 0);
+  const totalValue = localHoldings.reduce((sum, h) => sum + ((h.totalValue ?? 0) as number), 0);
+  const totalPnL = localHoldings.reduce((sum, h) => sum + ((h.pnl ?? 0) as number), 0);
 
   if (isLoading) {
     return (
@@ -61,16 +61,23 @@ export function HoldingsTable() {
             <tr><th className="text-left py-2 px-3 font-semibold">Symbol</th><th className="text-right py-2 px-3 font-semibold">Qty</th><th className="text-right py-2 px-3 font-semibold">T1 Qty</th><th className="text-right py-2 px-3 font-semibold">LTP</th><th className="text-right py-2 px-3 font-semibold">Value</th><th className="text-right py-2 px-3 font-semibold">P&L</th></tr>
           </thead>
           <tbody>
-            {localHoldings.map((holding) => (
-              <tr key={holding.symbol} className="border-b border-border hover:bg-muted/50 transition-colors">
-                <td className="py-2 px-3 font-medium">{holding.symbol}</td>
-                <td className="text-right py-2 px-3">{holding.quantity}</td>
-                <td className="text-right py-2 px-3">{holding.t1Quantity}</td>
-                <td className="text-right py-2 px-3 font-medium">₹{holding.ltp.toFixed(2)}</td>
-                <td className="text-right py-2 px-3">₹{holding.totalValue.toFixed(2)}</td>
-                <td className={cn('text-right py-2 px-3 font-semibold', holding.pnl >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400')}>₹{holding.pnl.toFixed(2)} ({holding.pnlPercent.toFixed(2)}%)</td>
-              </tr>
-            ))}
+            {localHoldings.map((holding) => {
+              const safeLtp = (holding.ltp ?? 0) as number;
+              const safeTotalValue = (holding.totalValue ?? 0) as number;
+              const safePnl = (holding.pnl ?? 0) as number;
+              const safePnlPercent = (holding.pnlPercent ?? 0) as number;
+
+              return (
+                <tr key={holding.symbol} className="border-b border-border hover:bg-muted/50 transition-colors">
+                  <td className="py-2 px-3 font-medium">{holding.symbol}</td>
+                  <td className="text-right py-2 px-3">{holding.quantity}</td>
+                  <td className="text-right py-2 px-3">{holding.t1Quantity}</td>
+                  <td className="text-right py-2 px-3 font-medium">₹{safeLtp.toFixed(2)}</td>
+                  <td className="text-right py-2 px-3">₹{safeTotalValue.toFixed(2)}</td>
+                  <td className={cn('text-right py-2 px-3 font-semibold', safePnl >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400')}>₹{safePnl.toFixed(2)} ({safePnlPercent.toFixed(2)}%)</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

@@ -28,7 +28,8 @@ cliqtrade_bp = Blueprint(
 )
 
 # Register API blueprint
-cliqtrade_bp.register_blueprint(api_bp, url_prefix="/1cliqtrade")
+# Note: api_bp already has url_prefix="/api", don't override it
+cliqtrade_bp.register_blueprint(api_bp)
 
 
 @cliqtrade_bp.route("/")

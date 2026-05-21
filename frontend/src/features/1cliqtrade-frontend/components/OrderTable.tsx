@@ -98,17 +98,20 @@ export function OrderTable() {
             <tr><th className="text-left py-2 px-3 font-semibold">Symbol</th><th className="text-center py-2 px-3 font-semibold">Action</th><th className="text-right py-2 px-3 font-semibold">Qty</th><th className="text-right py-2 px-3 font-semibold">Price</th><th className="text-right py-2 px-3 font-semibold">Filled</th><th className="text-center py-2 px-3 font-semibold">Status</th><th className="text-center py-2 px-3 font-semibold">Actions</th></tr>
           </thead>
           <tbody>
-            {localOrders.map((order) => (
-              <tr key={order.orderid} className={cn('border-b border-border hover:bg-muted/50 transition-colors', updating.has(order.orderid) && 'animate-pulse bg-yellow-50 dark:bg-yellow-950/20')}>
-                <td className="py-2 px-3 font-medium">{order.symbol}</td>
-                <td className="text-center py-2 px-3"><span className={`px-2 py-1 rounded text-xs font-semibold ${order.action === 'BUY' ? 'text-green-600' : 'text-red-600'}`}>{order.action}</span></td>
-                <td className="text-right py-2 px-3">{order.quantity}</td>
-                <td className="text-right py-2 px-3">₹{order.price.toFixed(2)}</td>
-                <td className="text-right py-2 px-3">{order.filledQuantity}/{order.quantity}</td>
-                <td className="text-center py-2 px-3"><span className={`px-2 py-1 rounded text-xs font-semibold ${getStatusColor(order.status)}`}>{order.status}</span></td>
-                <td className="text-center py-2 px-3">{order.status === 'PENDING' && (<button onClick={() => handleCancelOrder(order.orderid)} className="text-xs px-2 py-1 bg-red-500/10 hover:bg-red-500/20 text-red-600 rounded">Cancel</button>)}</td>
-              </tr>
-            ))}
+            {localOrders.map((order) => {
+              const safePrice = Number(order.price ?? 0) || 0;
+              return (
+                <tr key={order.orderid} className={cn('border-b border-border hover:bg-muted/50 transition-colors', updating.has(order.orderid) && 'animate-pulse bg-yellow-50 dark:bg-yellow-950/20')}>
+                  <td className="py-2 px-3 font-medium">{order.symbol}</td>
+                  <td className="text-center py-2 px-3"><span className={`px-2 py-1 rounded text-xs font-semibold ${order.action === 'BUY' ? 'text-green-600' : 'text-red-600'}`}>{order.action}</span></td>
+                  <td className="text-right py-2 px-3">{order.quantity}</td>
+                  <td className="text-right py-2 px-3">₹{safePrice.toFixed(2)}</td>
+                  <td className="text-right py-2 px-3">{order.filledQuantity}/{order.quantity}</td>
+                  <td className="text-center py-2 px-3"><span className={`px-2 py-1 rounded text-xs font-semibold ${getStatusColor(order.status)}`}>{order.status}</span></td>
+                  <td className="text-center py-2 px-3">{order.status === 'PENDING' && (<button onClick={() => handleCancelOrder(order.orderid)} className="text-xs px-2 py-1 bg-red-500/10 hover:bg-red-500/20 text-red-600 rounded">Cancel</button>)}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

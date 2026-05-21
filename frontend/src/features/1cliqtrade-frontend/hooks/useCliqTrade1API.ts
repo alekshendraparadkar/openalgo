@@ -266,7 +266,14 @@ export function useFunds() {
             if (response.status === 'error') {
                 throw new Error(response.message || 'Failed to fetch funds');
             }
-            return response.data;
+            return response.data || {
+                availableCash: 0,
+                usedMargin: 0,
+                availableMargin: 0,
+                totalMargin: 0,
+                pnl: 0,
+                collateral: 0,
+            };
         },
         staleTime: STALE_TIMES.FUNDS,
         refetchInterval: STALE_TIMES.FUNDS,
