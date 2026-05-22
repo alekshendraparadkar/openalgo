@@ -115,3 +115,66 @@ export interface WebSocketMessage {
   data: Record<string, any>;
   timestamp: number;
 }
+
+// ==================== Trading Interface Types ====================
+
+// Symbol Selection State
+export interface SymbolState {
+  exchange: string;           // 'NSE', 'BSE', 'NFO', 'BFO', 'MCX', 'NCDEX', 'CDS', 'BCD'
+  segment: string;            // 'Equity', 'Options', 'Futures', 'Currency', 'Commodity', 'Index'
+  symbol: string;             // 'NIFTY', 'SBIN', etc.
+  expiryDate?: string;        // '07-APR-26' format, for F&O only
+  lotSize: number;            // e.g., 65
+  productType: string;        // 'CNC', 'NRML', 'MIS'
+  slLevel?: number;           // Stop Loss price
+  target?: number;            // Target price
+  protectionPercent?: number; // Protection percentage
+  isTrial: boolean;           // Sandbox/analyzer mode
+}
+
+// Master Contract Types
+export interface MasterContract {
+  id: number;
+  symbol: string;             // e.g., 'SBIN'
+  exchange: string;           // 'NSE', 'BSE', etc.
+  segment: string;            // 'Equity', 'Options', 'Futures'
+  brsymbol: string;          // Broker-specific symbol
+  lotsize: number;           // Lot size for the instrument
+  token: number;             // Broker token/instrument ID
+  instrumenttype: string;    // 'EQUITY', 'OPTION', 'FUTURE', etc.
+  tick_size: number;         // Minimum tick size
+  expiry?: string;           // Expiry date for F&O (ISO format)
+}
+
+// Master Contract Filters
+export interface MasterContractFilters {
+  exchange?: string;
+  segment?: string;
+  expiry?: string;
+  instrumenttype?: string;
+}
+
+// Place Order Request
+export interface PlaceOrderRequest {
+  symbol: string;            // Full symbol with expiry for F&O
+  exchange: string;          // Exchange code
+  action: 'BUY' | 'SELL';    // Action
+  quantity: number;          // Quantity in lots
+  price: number;             // Order price (0 for MARKET)
+  pricetype: 'MARKET' | 'LIMIT' | 'SL' | 'SL-M'; // Price type
+  product: 'CNC' | 'NRML' | 'MIS'; // Product type
+  slprice?: number;          // Stop loss price
+  targetprice?: number;      // Target price
+  trial?: boolean;           // Sandbox mode flag
+}
+
+// Update Modal Context Type to include symbol state
+export interface Modal1CliqTradeContextType {
+  isOpen: boolean;
+  openModal: () => void;
+  closeModal: () => void;
+  // Symbol selection state
+  selectedSymbol: SymbolState;
+  selectSymbol: (symbolState: Partial<SymbolState>) => void;
+  resetSymbolState: () => void;
+}

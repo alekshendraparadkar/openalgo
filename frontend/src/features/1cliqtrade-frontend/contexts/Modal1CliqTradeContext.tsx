@@ -5,7 +5,7 @@
 
 import { createContext, useContext, useState, useCallback } from 'react';
 import type { ReactNode } from 'react';
-import type { Modal1CliqTradeContextType } from '../types/index';
+import type { Modal1CliqTradeContextType, SymbolState } from '../types/index';
 
 const Modal1CliqTradeContext = createContext<Modal1CliqTradeContextType | undefined>(undefined);
 
@@ -13,13 +13,24 @@ interface Modal1CliqTradeContextProviderProps {
   children: ReactNode;
 }
 
+// Default symbol state
+const DEFAULT_SYMBOL_STATE: SymbolState = {
+  exchange: 'NSE',
+  segment: 'Equity',
+  symbol: '',
+  lotSize: 1,
+  productType: 'CNC',
+  isTrial: false,
+};
+
 /**
- * Provider component that wraps the app with modal state management
+ * Provider component that wraps the app with modal and symbol state management
  */
 export function Modal1CliqTradeContextProvider({
   children,
 }: Modal1CliqTradeContextProviderProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [selectedSymbol, setSelectedSymbol] = useState<SymbolState>(DEFAULT_SYMBOL_STATE);
 
   const openModal = useCallback(() => {
     setIsOpen(true);
@@ -29,10 +40,24 @@ export function Modal1CliqTradeContextProvider({
     setIsOpen(false);
   }, []);
 
+  const selectSymbol = useCallback((symbolState: Partial<SymbolState>) => {
+    setSelectedSymbol((prev) => ({
+      ...prev,
+      ...symbolState,
+    }));
+  }, []);
+
+  const resetSymbolState = useCallback(() => {
+    setSelectedSymbol(DEFAULT_SYMBOL_STATE);
+  }, []);
+
   const value: Modal1CliqTradeContextType = {
     isOpen,
     openModal,
     closeModal,
+    selectedSymbol,
+    selectSymbol,
+    resetSymbolState,
   };
 
   return (

@@ -1,30 +1,52 @@
 /**
- * MarketStatus - Displays if market is open or closed
+ * MarketStatus - Displays if market is open or closed as a dot indicator
  */
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 /**
- * Component that shows market status (open/closed)
- * Can be extended to fetch real data from API
+ * Component that shows market status as a green/red dot
+ * Fetches real data from OpenAlgo API
  */
 export function MarketStatus() {
-  const isOpen = true;
+  const [isOpen, setIsOpen] = useState(false);
 
   useEffect(() => {
-    // TODO: Fetch market status from API: /1cliqtrade/api/is_market_open
-    // For now, assume market is open (can be updated with real data)
+    // Fetch market status from OpenAlgo API
+    const fetchMarketStatus = async () => {
+      try {
+        const response = await fetch('/1cliqtrade/api/is_market_open', {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include',
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setIsOpen(data.is_open === true || data.status === 'open');
+        }
+      } catch (error) {
+        console.warn('Failed to fetch market status:', error);
+        setIsOpen(false);
+      }
+    };
+
+    // Fetch initially
+    fetchMarketStatus();
+
+    // Refresh every 30 seconds
+    const interval = setInterval(fetchMarketStatus, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   return (
-    <div className="flex items-center gap-2">
-      <div
-        className={`w-2 h-2 rounded-full ${isOpen ? 'bg-green-500' : 'bg-red-500'
-          }`}
-      />
-      <span className="text-sm text-muted-foreground">
-        {isOpen ? 'Market Open' : 'Market Closed'}
-      </span>
-    </div>
+    <div
+      className={`w-3 h-3 rounded-full ${
+        isOpen ? 'bg-green-500 animate-pulse' : 'bg-red-500'
+      }`}
+      title={isOpen ? 'Market Open' : 'Market Closed'}
+    />
   );
 }

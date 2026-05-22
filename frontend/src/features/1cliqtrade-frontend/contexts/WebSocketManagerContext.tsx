@@ -443,15 +443,17 @@ export function WebSocketManagerProvider({
     );
 
     /**
-     * Cleanup on unmount
+     * Auto-connect on mount
      */
     useEffect(() => {
-        logger.info('WebSocketManagerProvider mounted');
+        logger.info('🚀 WebSocketManagerProvider mounted - attempting auto-connect');
+        connect();
+        
         return () => {
-            logger.info('WebSocketManagerProvider unmounting, cleaning up...');
+            logger.info('🧹 WebSocketManagerProvider unmounting, cleaning up...');
             disconnect();
         };
-    }, [disconnect, logger]);
+    }, [connect, disconnect, logger]);
 
     const contextValue: WebSocketManagerContextType = {
         isConnected: state === WebSocketState.CONNECTED,

@@ -27,7 +27,18 @@ export function useWebSocketLivePrice(symbol?: string) {
      * Handle live price message
      */
     const handleLivePrice = useCallback((data: any) => {
+        console.log(`[useWebSocketLivePrice] 💰 Price update received:`, {
+            incomingSymbol: data.symbol,
+            watchingSymbol: symbol,
+            matchesSymbol: data.symbol === symbol,
+            ltp: data.ltp || data.price,
+            bid: data.bid,
+            ask: data.ask,
+            data,
+        });
+
         if (data.symbol === symbol) {
+            console.log(`[useWebSocketLivePrice] ✅ Setting price for ${symbol}:`, data);
             setLivePrice({
                 symbol: data.symbol,
                 ltp: data.ltp || data.price || 0,
@@ -36,6 +47,8 @@ export function useWebSocketLivePrice(symbol?: string) {
                 volume: data.volume || 0,
                 timestamp: data.timestamp || Date.now(),
             });
+        } else {
+            console.warn(`[useWebSocketLivePrice] ❌ Symbol mismatch - got ${data.symbol} but watching ${symbol}`);
         }
     }, [symbol]);
 
@@ -43,7 +56,22 @@ export function useWebSocketLivePrice(symbol?: string) {
      * Subscribe/unsubscribe from live price updates
      */
     useEffect(() => {
-        if (!symbol || !isConnected) {
+        console.log(`[useWebSocketLivePrice] Effect triggered`, {
+            symbol,
+            isConnected,
+            isSubscribed,
+        });
+
+        if (!symbol) {
+            console.warn(`[useWebSocketLivePrice] ⚠️ No symbol provided`);
+            if (isSubscribed) {
+                setIsSubscribed(false);
+            }
+            return;
+        }
+
+        if (!isConnected) {
+            console.warn(`[useWebSocketLivePrice] ⚠️ WebSocket not connected for symbol: ${symbol}`);
             if (isSubscribed) {
                 setIsSubscribed(false);
             }
@@ -51,21 +79,26 @@ export function useWebSocketLivePrice(symbol?: string) {
         }
 
         try {
+            console.log(`[useWebSocketLivePrice] 📌 Subscribing to symbol: ${symbol}`);
+            
             // Subscribe to symbol
             subscribe(symbol);
             setIsSubscribed(true);
+
+            console.log(`[useWebSocketLivePrice] ✅ Successfully subscribed to: ${symbol}`);
 
             // Add message listener for 'ltp' message type
             const unsubscribeListener = addMessageListener('ltp', handleLivePrice);
 
             // Cleanup
             return () => {
+                console.log(`[useWebSocketLivePrice] 🧹 Unsubscribing from: ${symbol}`);
                 unsubscribeListener();
                 unsubscribe(symbol);
                 setIsSubscribed(false);
             };
         } catch (error) {
-            console.error('Error subscribing to live price:', error);
+            console.error(`[useWebSocketLivePrice] ❌ Error subscribing to ${symbol}:`, error);
         }
     }, [symbol, isConnected, subscribe, unsubscribe, addMessageListener, handleLivePrice]);
 

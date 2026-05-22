@@ -13,6 +13,9 @@ import type {
     Funds,
     BrokerInfo,
     MarketStatus,
+    PlaceOrderRequest,
+    MasterContract,
+    MasterContractFilters,
 } from '../types/index';
 import { createLogger } from '../utils/logger';
 import { retryWithBackoff, handleApiError } from '../utils/errorHandler';
@@ -242,4 +245,35 @@ export async function fetchBrokerInfo(): Promise<ApiResponse<BrokerInfo>> {
  */
 export async function fetchMarketStatus(): Promise<ApiResponse<MarketStatus>> {
     return apiRequestWithRetry<MarketStatus>('/is_market_open');
+}
+
+/**
+ * Master Contract API Endpoints
+ */
+export async function getMasterContracts(
+    filters?: MasterContractFilters
+): Promise<ApiResponse<MasterContract[]>> {
+    const params = new URLSearchParams();
+
+    if (filters?.exchange) params.append('exchange', filters.exchange);
+    if (filters?.segment) params.append('segment', filters.segment);
+    if (filters?.expiry) params.append('expiry', filters.expiry);
+    if (filters?.instrumenttype) params.append('instrumenttype', filters.instrumenttype);
+
+    const queryString = params.toString();
+    const endpoint = `/master-contracts${queryString ? `?${queryString}` : ''}`;
+
+    return apiRequestWithRetry<MasterContract[]>(endpoint);
+}
+
+/**
+ * Place Order API Endpoint
+ */
+export async function placeOrder(
+    orderData: PlaceOrderRequest
+): Promise<ApiResponse<Order>> {
+    return apiRequestWithRetry<Order>('/place_order', {
+        method: 'POST',
+        body: JSON.stringify(orderData),
+    });
 }

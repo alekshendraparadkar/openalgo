@@ -705,3 +705,285 @@ def modify_order_endpoint():
         error_msg = f"Error modifying order: {str(e)}"
         logger.error(f"[MODIFY ORDER] {error_msg}", exc_info=True)
         return jsonify({"status": "error", "message": error_msg}), 500
+
+
+@api_bp.route("/master-contracts", methods=["GET"])
+@check_session_validity
+@limiter.limit(API_RATE_LIMIT)
+def master_contracts():
+    """
+    Fetch master contracts with optional filtering
+    Query params: exchange, segment, expiry, instrumenttype
+    """
+    try:
+        # Get filters from query params
+        exchange = request.args.get("exchange", "").upper()
+        expiry = request.args.get("expiry", "").upper()
+        instrumenttype = request.args.get("instrumenttype", "").upper()
+
+        logger.info(
+            f"[MASTER CONTRACTS] Fetching contracts",
+            extra={
+                "exchange": exchange,
+                "expiry": expiry,
+                "instrumenttype": instrumenttype,
+            },
+        )
+
+        # Build query
+        query = db_session.query(SymToken)
+
+        if exchange:
+            query = query.filter(SymToken.exchange == exchange)
+        if expiry:
+            query = query.filter(SymToken.expiry == expiry)
+        if instrumenttype:
+            query = query.filter(SymToken.instrumenttype == instrumenttype)
+
+        contracts = query.all()
+
+        logger.info(f"[MASTER CONTRACTS] Found {len(contracts)} contracts")
+
+        # Format response
+        data = [
+            {
+                "id": contract.id,
+                "symbol": contract.symbol,
+                "exchange": contract.exchange,
+                "brsymbol": contract.brsymbol,
+                "lotsize": contract.lotsize,
+                "token": contract.token,
+                "instrumenttype": contract.instrumenttype,
+                "tick_size": contract.tick_size,
+                "expiry": contract.expiry,
+            }
+            for contract in contracts
+        ]
+
+        return (
+            jsonify(
+                {
+                    "status": "success",
+                    "message": f"Fetched {len(contracts)} master contracts",
+                    "data": data,
+                }
+            ),
+            200,
+        )
+
+    except Exception as e:
+        error_msg = f"Error fetching master contracts: {str(e)}"
+        logger.error(f"[MASTER CONTRACTS] {error_msg}", exc_info=True)
+        return jsonify({"status": "error", "message": error_msg}), 500
+
+
+@api_bp.route("/place_order", methods=["POST"])
+@check_session_validity
+@limiter.limit(API_RATE_LIMIT)
+def place_order():
+    """
+    Place a new order (BUY/SELL)
+    Required fields: symbol, exchange, action, quantity, price, pricetype, product
+    Optional fields: slprice, targetprice, trial
+    """
+    try:
+        login_username = session["user"]
+        AUTH_TOKEN = get_auth_token(login_username)
+
+        if AUTH_TOKEN is None:
+            logger.warning(f"[PLACE ORDER] No auth token for user {login_username}")
+            return (
+                jsonify(
+                    {
+                        "status": "error",
+                        "message": "Authentication token not found",
+                    }
+                ),
+                401,
+            )
+
+        broker = session.get("broker")
+        if not broker:
+            logger.error("[PLACE ORDER] Broker not set in session")
+            return (
+                jsonify({"status": "error", "message": "Broker not set in session"}),
+                400,
+            )
+
+        data = request.get_json()
+
+        # Validate required fields
+        required_fields = [
+            "symbol",
+            "exchange",
+            "action",
+            "quantity",
+            "price",
+            "pricetype",
+            "product",
+        ]
+        missing_fields = [
+            f for f in required_fields if f not in data or data[f] is None
+        ]
+
+        if missing_fields:
+            error_msg = f"Missing required fields: {', '.join(missing_fields)}"
+            logger.warning(f"[PLACE ORDER] {error_msg}")
+            return jsonify({"status": "error", "message": error_msg}), 400
+
+        # Validate action and pricetype
+        if data["action"].upper() not in ["BUY", "SELL"]:
+            return (
+                jsonify(
+                    {
+                        "status": "error",
+                        "message": "Invalid action. Must be BUY or SELL",
+                    }
+                ),
+                400,
+            )
+
+        if data["pricetype"].upper() not in ["MARKET", "LIMIT", "SL", "SL-M"]:
+            return (
+                jsonify(
+                    {
+                        "status": "error",
+                        "message": "Invalid pricetype. Must be MARKET, LIMIT, SL, or SL-M",
+                    }
+                ),
+                400,
+            )
+
+        if data["product"].upper() not in ["CNC", "NRML", "MIS"]:
+            return (
+                jsonify(
+                    {
+                        "status": "error",
+                        "message": "Invalid product. Must be CNC, NRML, or MIS",
+                    }
+                ),
+                400,
+            )
+
+        # Validate quantity is positive
+        if int(data["quantity"]) <= 0:
+            return (
+                jsonify(
+                    {"status": "error", "message": "Quantity must be greater than 0"}
+                ),
+                400,
+            )
+
+        logger.info(
+            f"[PLACE ORDER] User: {login_username}, Symbol: {data['symbol']}, "
+            f"Action: {data['action']}, Qty: {data['quantity']}, Price: {data['price']}"
+        )
+
+        # Get token for the symbol
+        token = get_token(data["symbol"], data["exchange"])
+        if not token:
+            logger.error(
+                f"[PLACE ORDER] Token not found for {data['symbol']} on {data['exchange']}"
+            )
+            return (
+                jsonify(
+                    {
+                        "status": "error",
+                        "message": f"Token not found for symbol {data['symbol']}",
+                    }
+                ),
+                400,
+            )
+
+        # Get broker symbol
+        br_symbol = get_br_symbol(data["symbol"], data["exchange"])
+        logger.info(
+            f"[PLACE ORDER] Token: {token}, BR Symbol: {br_symbol}, "
+            f"Broker: {broker}"
+        )
+
+        # Build order request
+        order_request = {
+            "symbol": br_symbol,
+            "exchange": data["exchange"],
+            "action": data["action"].upper(),
+            "quantity": int(data["quantity"]),
+            "price": float(data["price"]) if data["price"] else 0,
+            "pricetype": data["pricetype"].upper(),
+            "product": data["product"].upper(),
+        }
+
+        # Add optional fields
+        if "slprice" in data and data["slprice"]:
+            order_request["slprice"] = float(data["slprice"])
+        if "targetprice" in data and data["targetprice"]:
+            order_request["targetprice"] = float(data["targetprice"])
+
+        # Import broker-specific place_order function
+        broker_order_functions = dynamic_import(
+            broker, "api.order_api", ["place_order"]
+        )
+        if not broker_order_functions:
+            logger.error(
+                f"[PLACE ORDER] Failed to import place_order for broker {broker}"
+            )
+            return (
+                jsonify(
+                    {
+                        "status": "error",
+                        "message": f"Broker API not available for {broker}",
+                    }
+                ),
+                500,
+            )
+
+        try:
+            success, response = broker_order_functions["place_order"](
+                order_request, AUTH_TOKEN
+            )
+
+            if success:
+                logger.info(
+                    f"[PLACE ORDER] Success - Order ID: {response.get('orderid')}, "
+                    f"Status: {response.get('order_status')}"
+                )
+                return (
+                    jsonify(
+                        {
+                            "status": "success",
+                            "message": "Order placed successfully",
+                            "orderid": response.get("orderid"),
+                            "data": response,
+                        }
+                    ),
+                    200,
+                )
+            else:
+                error_msg = response.get("message", "Failed to place order")
+                logger.warning(f"[PLACE ORDER] Failed - {error_msg}")
+                return jsonify({"status": "error", "message": error_msg}), 400
+
+        except Exception as broker_error:
+            error_msg = f"Broker API error: {str(broker_error)}"
+            logger.error(f"[PLACE ORDER] {error_msg}", exc_info=True)
+            return jsonify({"status": "error", "message": error_msg}), 500
+
+    except KeyError as e:
+        error_msg = f"Missing required field in data: {str(e)}"
+        logger.error(f"[PLACE ORDER] {error_msg}")
+        return jsonify({"status": "error", "message": error_msg}), 400
+
+    except json.JSONDecodeError as e:
+        error_msg = f"Invalid JSON in request: {str(e)}"
+        logger.error(f"[PLACE ORDER] {error_msg}")
+        return jsonify({"status": "error", "message": "Invalid JSON format"}), 400
+
+    except ValueError as e:
+        error_msg = f"Invalid data format: {str(e)}"
+        logger.error(f"[PLACE ORDER] {error_msg}")
+        return jsonify({"status": "error", "message": error_msg}), 400
+
+    except Exception as e:
+        error_msg = f"Error placing order: {str(e)}"
+        logger.error(f"[PLACE ORDER] {error_msg}", exc_info=True)
+        return jsonify({"status": "error", "message": error_msg}), 500
