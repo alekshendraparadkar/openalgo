@@ -256,9 +256,9 @@ export async function getMasterContracts(
     const params = new URLSearchParams();
 
     if (filters?.exchange) params.append('exchange', filters.exchange);
-    if (filters?.segment) params.append('segment', filters.segment);
     if (filters?.expiry) params.append('expiry', filters.expiry);
-    if (filters?.instrumenttype) params.append('instrumenttype', filters.instrumenttype);
+    // Send instrumentType to backend as instrumenttype parameter (what backend expects)
+    if (filters?.instrumentType) params.append('instrumenttype', filters.instrumentType);
 
     const queryString = params.toString();
     const endpoint = `/master-contracts${queryString ? `?${queryString}` : ''}`;

@@ -14,8 +14,18 @@ const logger = createLogger('SymbolControlPanel');
 
 // Available options
 const EXCHANGES = ['NSE', 'BSE', 'NFO', 'BFO', 'MCX', 'NCDEX', 'CDS', 'BCD'];
-const SEGMENTS = ['Equity', 'Options', 'Futures', 'Currency', 'Commodity', 'Index'];
 const PRODUCTS = ['CNC', 'NRML', 'MIS'];
+
+// Instrument Types: Display name → Backend value mapping
+// Frontend shows friendly names, backend uses uppercase values
+const INSTRUMENT_TYPES = [
+    { display: 'Equity', value: 'EQUITY' },
+    { display: 'Options', value: 'OPTION' },
+    { display: 'Futures', value: 'FUTURE' },
+    { display: 'Index', value: 'INDEX' },
+    { display: 'Currency', value: 'CURRENCY' },
+    { display: 'Commodity', value: 'COMMODITY' },
+];
 
 // LocalStorage key for persisting symbol state
 const STORAGE_KEY = '1cliqtrade-symbol-state';
@@ -51,7 +61,7 @@ export function SymbolControlPanel({ className = '' }: SymbolControlPanelProps) 
     // Phase 7: Save symbol state to localStorage whenever it changes
     useEffect(() => {
         if (!isInitialized) return;
-        
+
         try {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(selectedSymbol));
             logger.debug('💾 Saved symbol state to localStorage');
@@ -60,7 +70,7 @@ export function SymbolControlPanel({ className = '' }: SymbolControlPanelProps) 
         }
     }, [selectedSymbol, isInitialized]);
 
-    // Fetch master contracts when exchange or segment changes
+    // Fetch master contracts when exchange or instrumentType changes
     useEffect(() => {
         const fetchContracts = async () => {
             try {
@@ -69,11 +79,11 @@ export function SymbolControlPanel({ className = '' }: SymbolControlPanelProps) 
 
                 const filters: MasterContractFilters = {
                     exchange: selectedSymbol.exchange,
-                    segment: selectedSymbol.segment,
+                    instrumentType: selectedSymbol.instrumentType, // Use instrumentType instead of segment
                 };
 
-                // Add expiry filter if F&O product
-                if (['Options', 'Futures'].includes(selectedSymbol.segment) && selectedSymbol.expiryDate) {
+                // Add expiry filter if F&O product (OPTION or FUTURE)
+                if (['OPTION', 'FUTURE'].includes(selectedSymbol.instrumentType || '') && selectedSymbol.expiryDate) {
                     filters.expiry = selectedSymbol.expiryDate;
                 }
 
@@ -84,7 +94,7 @@ export function SymbolControlPanel({ className = '' }: SymbolControlPanelProps) 
                     setMasterContracts(response.data);
                     logger.info(`✅ Loaded ${response.data.length} contracts`, {
                         exchange: selectedSymbol.exchange,
-                        segment: selectedSymbol.segment,
+                        instrumentType: selectedSymbol.instrumentType,
                     });
                 } else {
                     setError(response.message || 'Failed to load master contracts');
@@ -100,7 +110,7 @@ export function SymbolControlPanel({ className = '' }: SymbolControlPanelProps) 
         };
 
         fetchContracts();
-    }, [selectedSymbol.exchange, selectedSymbol.segment, selectedSymbol.expiryDate]);
+    }, [selectedSymbol.exchange, selectedSymbol.instrumentType, selectedSymbol.expiryDate]);
 
     // Filter contracts based on symbol search input
     useEffect(() => {
@@ -117,14 +127,22 @@ export function SymbolControlPanel({ className = '' }: SymbolControlPanelProps) 
     }, [selectedSymbol.symbol, masterContracts]);
 
     // When a symbol is selected from autocomplete, update context with lot size
+    // BUG #3 FIX: Include expiry and instrumenttype from contract
     const handleSymbolSelect = useCallback(
         (contract: MasterContract) => {
             selectSymbol({
                 symbol: contract.symbol,
                 lotSize: contract.lotsize,
+                expiry: contract.expiry || undefined,              // ← Bug #3 Fix: Save expiry
+                instrumentType: contract.instrumenttype || undefined, // ← Bug #3 Fix: Save instrumenttype
             });
             setShowDropdown(false); // Close dropdown after selection
-            logger.info('📊 Symbol selected', { symbol: contract.symbol, lotsize: contract.lotsize });
+            logger.info('📊 Symbol selected', {
+                symbol: contract.symbol,
+                lotsize: contract.lotsize,
+                expiry: contract.expiry,
+                instrumenttype: contract.instrumenttype,
+            });
         },
         [selectSymbol]
     );
@@ -138,11 +156,11 @@ export function SymbolControlPanel({ className = '' }: SymbolControlPanelProps) 
         [selectSymbol]
     );
 
-    // Handle segment change
-    const handleSegmentChange = useCallback(
-        (segment: string) => {
-            selectSymbol({ segment, symbol: '' }); // Reset symbol on segment change
-            logger.info('📈 Segment changed', { segment });
+    // Handle instrument type change
+    const handleInstrumentTypeChange = useCallback(
+        (value: string) => {
+            selectSymbol({ instrumentType: value, symbol: '' }); // Reset symbol on instrumentType change
+            logger.info('📈 Instrument type changed', { instrumentType: value });
         },
         [selectSymbol]
     );
@@ -202,16 +220,21 @@ export function SymbolControlPanel({ className = '' }: SymbolControlPanelProps) 
                     </select>
                 </div>
 
-                {/* Segment */}
+                {/* Instrument Type */}
                 <div className="flex flex-col">
-                    <label className="text-xs font-bold text-slate-600 leading-none">Seg</label>
+                    <label className="text-xs font-bold text-slate-600 leading-none">Type</label>
                     <select
-                        value={selectedSymbol.segment}
-                        onChange={(e) => handleSegmentChange(e.target.value)}
-                        className="px-1 py-0.5 border border-slate-300 rounded bg-white text-xs text-black focus:outline-none focus:ring-1 focus:ring-blue-400 w-14"
+                        value={selectedSymbol.instrumentType || ''}
+                        onChange={(e) => handleInstrumentTypeChange(e.target.value)}
+                        className="px-1 py-0.5 border border-slate-300 rounded bg-white text-xs text-black focus:outline-none focus:ring-1 focus:ring-blue-400 w-16"
                         disabled={isLoading}
                     >
-                        {SEGMENTS.map((seg) => <option key={seg} value={seg}>{seg}</option>)}
+                        <option value="">Select</option>
+                        {INSTRUMENT_TYPES.map((item) => (
+                            <option key={item.value} value={item.value}>
+                                {item.display}
+                            </option>
+                        ))}
                     </select>
                 </div>
 
@@ -248,8 +271,8 @@ export function SymbolControlPanel({ className = '' }: SymbolControlPanelProps) 
                     </div>
                 </div>
 
-                {/* Expiry (F&O only) */}
-                {['Options', 'Futures'].includes(selectedSymbol.segment) && (
+                {/* Expiry (F&O only - for OPTION or FUTURE types) */}
+                {['OPTION', 'FUTURE'].includes(selectedSymbol.instrumentType || '') && (
                     <div className="flex flex-col">
                         <label className="text-xs font-bold text-slate-600 leading-none">Exp</label>
                         <input

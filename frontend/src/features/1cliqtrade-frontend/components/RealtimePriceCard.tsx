@@ -7,6 +7,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useModal1CliqTrade } from '../contexts/Modal1CliqTradeContext';
 import { useWebSocketLivePrice } from '../hooks/useWebSocketLivePrice';
+import { useWebSocketManager } from '../contexts/WebSocketManagerContext';
 import { createLogger } from '../utils/logger';
 
 const logger = createLogger('RealtimePriceCard');
@@ -19,42 +20,67 @@ interface RealtimePriceCardProps {
 
 export function RealtimePriceCard({ className = '', onQuantityChange, onPriceLevelsChange }: RealtimePriceCardProps) {
     const { selectedSymbol } = useModal1CliqTrade();
+    // BUG #6 FIX: Get WebSocket connection status
+    const { isConnected } = useWebSocketManager();
     const [quantity, setQuantity] = useState<number>(selectedSymbol.lotSize || 1);
     const [buyLevel, setBuyLevel] = useState<number>(0);
     const [sellLevel, setSellLevel] = useState<number>(0);
 
     console.log('[RealtimePriceCard] Selected symbol:', {
         symbol: selectedSymbol.symbol,
-        segment: selectedSymbol.segment,
+        instrumentType: selectedSymbol.instrumentType,
         exchange: selectedSymbol.exchange,
         lotSize: selectedSymbol.lotSize,
     });
 
-    // Subscribe to spot price
-    const { livePrice: spotPrice } = useWebSocketLivePrice(
-        selectedSymbol.segment === 'Equity' ? selectedSymbol.symbol : undefined
-    );
+    // BUG #4 FIX: Extract underlying symbol for SPOT price (all instrument types)
+    // For Equity: Use symbol as-is
+    // For F&O: Extract base symbol (e.g., NIFTY26MAY24FUT → NIFTY)
+    const spotSymbol = useMemo(() => {
+        if (selectedSymbol.instrumentType === 'EQUITY') {
+            return selectedSymbol.symbol;  // INFY
+        } else if (['OPTION', 'FUTURE'].includes(selectedSymbol.instrumentType || '') && selectedSymbol.symbol) {
+            // Extract base symbol using regex: get letters at start
+            // Examples:
+            //   NIFTY26MAY24FUT → NIFTY
+            //   BANKNIFTY26MAY24FUT → BANKNIFTY
+            //   NIFTY26MAY2420800CE → NIFTY
+            //   M&M26MAY24FUT → M&M
+            const match = selectedSymbol.symbol.match(/^([A-Z&]+)/);
+            const underlying = match ? match[1] : undefined;
+            logger.debug('🔍 Extracted underlying symbol', {
+                input: selectedSymbol.symbol,
+                output: underlying,
+                instrumentType: selectedSymbol.instrumentType,
+            });
+            return underlying;
+        }
+        return undefined;
+    }, [selectedSymbol.symbol, selectedSymbol.instrumentType]);
+
+    // Subscribe to spot price (for all segments - underlying for F&O)
+    const { livePrice: spotPrice } = useWebSocketLivePrice(spotSymbol);
 
     // Subscribe to futures price (if F&O)
     const futuresSymbol = useMemo(() => {
-        if (['Options', 'Futures'].includes(selectedSymbol.segment) && selectedSymbol.symbol) {
+        if (['OPTION', 'FUTURE'].includes(selectedSymbol.instrumentType || '') && selectedSymbol.symbol) {
             // Format: SYMBOL+EXPIRYDATE+FUT (e.g., NIFTY26APR24FUT)
             return `${selectedSymbol.symbol}${selectedSymbol.expiryDate?.replace(/-/g, '')}FUT`;
         }
         return undefined;
-    }, [selectedSymbol.symbol, selectedSymbol.segment, selectedSymbol.expiryDate]);
+    }, [selectedSymbol.symbol, selectedSymbol.instrumentType, selectedSymbol.expiryDate]);
 
     const { livePrice: futuresPrice } = useWebSocketLivePrice(futuresSymbol);
 
-    // Subscribe to options price (if Options segment)
+    // Subscribe to options price (if Options instrument type)
     const optionsSymbol = useMemo(() => {
-        if (selectedSymbol.segment === 'Options' && selectedSymbol.symbol) {
+        if (selectedSymbol.instrumentType === 'OPTION' && selectedSymbol.symbol) {
             // Format: SYMBOL+EXPIRY+STRIKE+CE/PE (e.g., NIFTY26APR2420800CE)
             // For now, we'll use a placeholder - this would be determined by strike selection
             return undefined; // Will be set when user selects strike
         }
         return undefined;
-    }, [selectedSymbol.symbol, selectedSymbol.segment]);
+    }, [selectedSymbol.symbol, selectedSymbol.instrumentType]);
 
     const { livePrice: optionsPrice } = useWebSocketLivePrice(optionsSymbol);
 
@@ -129,6 +155,15 @@ export function RealtimePriceCard({ className = '', onQuantityChange, onPriceLev
             <div className="mb-1 pb-0.5 border-b border-slate-200">
                 <h3 className="text-xs font-bold text-slate-900">📊 Prices</h3>
             </div>
+
+            {/* BUG #6 FIX: Connection Status Display */}
+            {!isConnected && (
+                <div className="mb-1 p-1 bg-yellow-50 border border-yellow-300 rounded">
+                    <p className="text-xs text-yellow-700 font-semibold">
+                        📡 Connecting to price server...
+                    </p>
+                </div>
+            )}
 
             {/* Price Display - Ultra Compact */}
             <div className="grid grid-cols-3 gap-0.5 mb-1">

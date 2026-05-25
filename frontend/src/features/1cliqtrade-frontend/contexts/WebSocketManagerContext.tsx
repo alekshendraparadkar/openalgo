@@ -79,6 +79,89 @@ export function WebSocketManagerProvider({
     const heartbeatTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const messageCountRef = useRef<Record<string, number>>({});
     const isExplicitlyDisconnectedRef = useRef(false);
+    const authenticationAttemptedRef = useRef(false);
+
+    /**
+     * Fetch API key from localStorage or /apikey endpoint
+     * BUG #2 FIX: Retrieve API key for WebSocket authentication
+     */
+    const fetchApiKey = useCallback(async (): Promise<string | null> => {
+        try {
+            // Try to get from localStorage first (authStore persists to "openalgo-auth")
+            const authStoreJson = localStorage.getItem('openalgo-auth');
+            if (authStoreJson) {
+                try {
+                    const authStore = JSON.parse(authStoreJson);
+                    if (authStore.state?.apiKey) {
+                        logger.debug('✅ API key retrieved from localStorage');
+                        return authStore.state.apiKey;
+                    }
+                } catch (e) {
+                    logger.debug('⚠️ Failed to parse localStorage auth store', { error: String(e) });
+                }
+            }
+
+            // Fallback: Fetch from /apikey endpoint
+            logger.debug('📡 Fetching API key from /apikey endpoint');
+            const response = await fetch('/apikey', {
+                method: 'GET',
+                credentials: 'include',
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                if (data.api_key) {
+                    logger.debug('✅ API key retrieved from /apikey endpoint');
+                    return data.api_key;
+                }
+            } else if (response.status === 401) {
+                logger.warn('⚠️ Not authenticated - cannot get API key');
+                return null;
+            }
+        } catch (error) {
+            logger.error('Failed to fetch API key', { error: String(error) });
+        }
+
+        return null;
+    }, [logger]);
+
+    /**
+     * Send WebSocket authentication message
+     * BUG #1 FIX: Send auth message within grace period (15 seconds)
+     */
+    const sendAuthentication = useCallback(async () => {
+        if (authenticationAttemptedRef.current) {
+            logger.debug('⚠️ Authentication already attempted for this connection');
+            return;
+        }
+
+        authenticationAttemptedRef.current = true;
+
+        if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+            logger.warn('⚠️ WebSocket not ready for authentication');
+            return;
+        }
+
+        const apiKey = await fetchApiKey();
+        if (!apiKey) {
+            logger.error('🔴 Cannot authenticate - no API key available');
+            return;
+        }
+
+        try {
+            const authMessage = {
+                action: 'authenticate',
+                apikey: apiKey,
+            };
+
+            wsRef.current.send(JSON.stringify(authMessage));
+            logger.info('📌 WebSocket authentication message sent', {
+                timestamp: new Date().toISOString(),
+            });
+        } catch (error) {
+            logger.error('Failed to send authentication message', { error: String(error) });
+        }
+    }, [fetchApiKey, logger]);
 
     /**
      * Calculate exponential backoff delay
@@ -248,6 +331,7 @@ export function WebSocketManagerProvider({
         setState(WebSocketState.CONNECTING);
         reconnectAttemptsRef.current = 0;
         isExplicitlyDisconnectedRef.current = false;
+        authenticationAttemptedRef.current = false;
         messageCountRef.current = {};
 
         try {
@@ -263,28 +347,35 @@ export function WebSocketManagerProvider({
                 reconnectAttemptsRef.current = 0;
                 setupHeartbeat();
 
-                const symbolsArray = Array.from(subscribedSymbolsRef.current);
-                if (symbolsArray.length > 0) {
-                    logger.info(`🔄 Resubscribing to ${symbolsArray.length} symbols`, {
-                        symbols: symbolsArray,
-                    });
+                // BUG #1 FIX: Send authentication immediately after connection
+                sendAuthentication().then(() => {
+                    logger.info('🔄 Authentication successful - resubscribing to symbols');
 
-                    symbolsArray.forEach((symbol) => {
-                        try {
-                            wsRef.current?.send(
-                                JSON.stringify({
-                                    type: 'subscribe',
-                                    symbol,
-                                })
-                            );
-                            logger.debug(`✅ Subscribed to symbol: ${symbol}`);
-                        } catch (error) {
-                            logger.error(`Failed to resubscribe to ${symbol}`, {
-                                error: String(error),
-                            });
-                        }
-                    });
-                }
+                    const symbolsArray = Array.from(subscribedSymbolsRef.current);
+                    if (symbolsArray.length > 0) {
+                        logger.info(`🔄 Resubscribing to ${symbolsArray.length} symbols`, {
+                            symbols: symbolsArray,
+                        });
+
+                        symbolsArray.forEach((symbol) => {
+                            try {
+                                wsRef.current?.send(
+                                    JSON.stringify({
+                                        type: 'subscribe',
+                                        symbol,
+                                    })
+                                );
+                                logger.debug(`✅ Subscribed to symbol: ${symbol}`);
+                            } catch (error) {
+                                logger.error(`Failed to resubscribe to ${symbol}`, {
+                                    error: String(error),
+                                });
+                            }
+                        });
+                    }
+                }).catch((error) => {
+                    logger.error('Authentication failed', { error: String(error) });
+                });
             };
 
             wsRef.current.onmessage = handleMessage;
@@ -328,7 +419,7 @@ export function WebSocketManagerProvider({
             setState(WebSocketState.FAILED);
             attemptReconnect();
         }
-    }, [wsUrl, handleMessage, setupHeartbeat, clearHeartbeat, attemptReconnect, logger]);
+    }, [wsUrl, handleMessage, setupHeartbeat, clearHeartbeat, attemptReconnect, sendAuthentication, logger]);
 
     /**
      * Disconnect from WebSocket
@@ -448,7 +539,7 @@ export function WebSocketManagerProvider({
     useEffect(() => {
         logger.info('🚀 WebSocketManagerProvider mounted - attempting auto-connect');
         connect();
-        
+
         return () => {
             logger.info('🧹 WebSocketManagerProvider unmounting, cleaning up...');
             disconnect();

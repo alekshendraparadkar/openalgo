@@ -16,7 +16,7 @@ interface Modal1CliqTradeContextProviderProps {
 // Default symbol state
 const DEFAULT_SYMBOL_STATE: SymbolState = {
   exchange: 'NSE',
-  segment: 'Equity',
+  instrumentType: 'EQUITY', // Use EQUITY instead of segment 'Equity'
   symbol: '',
   lotSize: 1,
   productType: 'CNC',

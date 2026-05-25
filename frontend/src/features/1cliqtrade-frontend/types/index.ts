@@ -121,7 +121,6 @@ export interface WebSocketMessage {
 // Symbol Selection State
 export interface SymbolState {
   exchange: string;           // 'NSE', 'BSE', 'NFO', 'BFO', 'MCX', 'NCDEX', 'CDS', 'BCD'
-  segment: string;            // 'Equity', 'Options', 'Futures', 'Currency', 'Commodity', 'Index'
   symbol: string;             // 'NIFTY', 'SBIN', etc.
   expiryDate?: string;        // '07-APR-26' format, for F&O only
   lotSize: number;            // e.g., 65
@@ -130,6 +129,8 @@ export interface SymbolState {
   target?: number;            // Target price
   protectionPercent?: number; // Protection percentage
   isTrial: boolean;           // Sandbox/analyzer mode
+  expiry?: string | null;     // Bug #3: Expiry date from master contract
+  instrumentType?: string;    // Bug #3: Instrument type from master contract (EQUITY, OPTION, FUTURE, etc.)
 }
 
 // Master Contract Types
@@ -137,11 +138,10 @@ export interface MasterContract {
   id: number;
   symbol: string;             // e.g., 'SBIN'
   exchange: string;           // 'NSE', 'BSE', etc.
-  segment: string;            // 'Equity', 'Options', 'Futures'
   brsymbol: string;          // Broker-specific symbol
   lotsize: number;           // Lot size for the instrument
   token: number;             // Broker token/instrument ID
-  instrumenttype: string;    // 'EQUITY', 'OPTION', 'FUTURE', etc.
+  instrumenttype: string;    // 'EQUITY', 'OPTION', 'FUTURE', 'INDEX', 'CURRENCY', 'COMMODITY'
   tick_size: number;         // Minimum tick size
   expiry?: string;           // Expiry date for F&O (ISO format)
 }
@@ -149,9 +149,8 @@ export interface MasterContract {
 // Master Contract Filters
 export interface MasterContractFilters {
   exchange?: string;
-  segment?: string;
   expiry?: string;
-  instrumenttype?: string;
+  instrumentType?: string;  // Use instrumentType directly (EQUITY, OPTION, FUTURE, etc.)
 }
 
 // Place Order Request
