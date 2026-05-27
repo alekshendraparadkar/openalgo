@@ -67,10 +67,15 @@ async function apiRequest<T>(
 
         // Add CSRF token if available (for POST/PUT/DELETE requests)
         if (['POST', 'PUT', 'DELETE'].includes(method)) {
-            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-            if (csrfToken) {
-                (headers as Record<string, string>)['X-CSRF-Token'] = csrfToken;
-                logger.debug('CSRF token added to request headers');
+            try {
+                const csrfResponse = await fetch('/auth/csrf-token', { credentials: 'include' });
+                const csrfData = await csrfResponse.json();
+                if (csrfData.csrf_token) {
+                    (headers as Record<string, string>)['X-CSRF-Token'] = csrfData.csrf_token;
+                    logger.debug('CSRF token fetched and added to request headers');
+                }
+            } catch (error) {
+                logger.warn('Failed to fetch CSRF token', { error: String(error) });
             }
         }
 
