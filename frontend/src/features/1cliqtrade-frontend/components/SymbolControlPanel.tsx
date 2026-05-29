@@ -38,6 +38,7 @@ export function SymbolControlPanel({ className = '' }: SymbolControlPanelProps) 
     const { selectedSymbol, selectSymbol } = useModal1CliqTrade();
     const [masterContracts, setMasterContracts] = useState<MasterContract[]>([]);
     const [filteredContracts, setFilteredContracts] = useState<MasterContract[]>([]);
+    const [searchInput, setSearchInput] = useState<string>('');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [isInitialized, setIsInitialized] = useState(false);
@@ -112,19 +113,19 @@ export function SymbolControlPanel({ className = '' }: SymbolControlPanelProps) 
         fetchContracts();
     }, [selectedSymbol.exchange, selectedSymbol.instrumentType, selectedSymbol.expiryDate]);
 
-    // Filter contracts based on symbol search input
+    // Filter contracts based on search input (NOT selectedSymbol.symbol)
     useEffect(() => {
-        if (!selectedSymbol.symbol) {
+        if (!searchInput) {
             setFilteredContracts(masterContracts);
             return;
         }
 
         const filtered = masterContracts.filter((contract) =>
-            contract.symbol.toUpperCase().includes(selectedSymbol.symbol.toUpperCase())
+            contract.symbol.toUpperCase().includes(searchInput.toUpperCase())
         );
 
         setFilteredContracts(filtered);
-    }, [selectedSymbol.symbol, masterContracts]);
+    }, [searchInput, masterContracts]);
 
     // When a symbol is selected from autocomplete, update context with lot size
     // BUG #3 FIX: Include expiry and instrumenttype from contract
@@ -136,6 +137,7 @@ export function SymbolControlPanel({ className = '' }: SymbolControlPanelProps) 
                 expiry: contract.expiry || undefined,              // ← Bug #3 Fix: Save expiry
                 instrumentType: contract.instrumenttype || undefined, // ← Bug #3 Fix: Save instrumenttype
             });
+            setSearchInput(''); // Clear search after selection
             setShowDropdown(false); // Close dropdown after selection
             logger.info('📊 Symbol selected', {
                 symbol: contract.symbol,
@@ -151,6 +153,8 @@ export function SymbolControlPanel({ className = '' }: SymbolControlPanelProps) 
     const handleExchangeChange = useCallback(
         (exchange: string) => {
             selectSymbol({ exchange, symbol: '' }); // Reset symbol on exchange change
+            setSearchInput(''); // Reset search input
+            setShowDropdown(false);
             logger.info('🏛️ Exchange changed', { exchange });
         },
         [selectSymbol]
@@ -160,6 +164,8 @@ export function SymbolControlPanel({ className = '' }: SymbolControlPanelProps) 
     const handleInstrumentTypeChange = useCallback(
         (value: string) => {
             selectSymbol({ instrumentType: value, symbol: '' }); // Reset symbol on instrumentType change
+            setSearchInput(''); // Reset search input
+            setShowDropdown(false);
             logger.info('📈 Instrument type changed', { instrumentType: value });
         },
         [selectSymbol]
@@ -206,7 +212,7 @@ export function SymbolControlPanel({ className = '' }: SymbolControlPanelProps) 
             )}
 
             {/* Single Compact Row */}
-            <div className="flex flex-wrap items-center gap-0.5">
+            <div className="flex flex-wrap items-start gap-0.5">
                 {/* Exchange */}
                 <div className="flex flex-col">
                     <label className="text-xs font-bold text-slate-600 leading-none">Ex</label>
@@ -238,34 +244,88 @@ export function SymbolControlPanel({ className = '' }: SymbolControlPanelProps) 
                     </select>
                 </div>
 
-                {/* Symbol (wider) */}
-                <div className="flex flex-col relative flex-1 min-w-[90px] max-w-xs">
+                {/* Symbol (wider) - Enhanced Search Dropdown */}
+                <div className="flex flex-col relative flex-1 min-w-[90px] max-w-xs z-30">
                     <label className="text-xs font-bold text-slate-600 leading-none">Sym</label>
-                    <div className="relative">
-                        <input
-                            type="text"
-                            placeholder="..."
-                            value={selectedSymbol.symbol}
-                            onChange={(e) => {
-                                selectSymbol({ symbol: e.target.value });
-                                setShowDropdown(e.target.value.length > 0);
-                            }}
-                            disabled={isLoading}
-                            className="w-full px-1 py-0.5 border border-slate-300 rounded bg-white text-xs text-black focus:outline-none focus:ring-1 focus:ring-blue-400"
-                        />
-                        {showDropdown && selectedSymbol.symbol && filteredContracts.length > 0 && (
-                            <div className="absolute top-full left-0 right-0 mt-0.5 bg-white border border-slate-300 rounded shadow-md z-20 max-h-24 overflow-y-auto">
-                                {filteredContracts.slice(0, 5).map((contract) => (
-                                    <div
-                                        key={contract.id}
-                                        onClick={() => {
-                                            handleSymbolSelect(contract);
-                                        }}
-                                        className="px-1 py-0.5 hover:bg-blue-100 cursor-pointer text-xs text-black border-b border-slate-100"
-                                    >
-                                        {contract.symbol}
+                    <div className="relative z-30">
+                        {/* Search Input */}
+                        <div className="flex items-center gap-0.5">
+                            <input
+                                type="text"
+                                placeholder="Search..."
+                                value={searchInput}
+                                onChange={(e) => setSearchInput(e.target.value)}
+                                onFocus={() => {
+                                    logger.debug('🔍 Search input focused', { masterContracts: masterContracts.length });
+                                    if (masterContracts.length > 0) setShowDropdown(true);
+                                }}
+                                onBlur={() => {
+                                    // Delay closing to allow click to register
+                                    setTimeout(() => setShowDropdown(false), 150);
+                                }}
+                                disabled={isLoading}
+                                className="flex-1 px-1 py-0.5 border border-slate-300 rounded bg-white text-xs text-black focus:outline-none focus:ring-1 focus:ring-blue-400"
+                            />
+                            {searchInput && (
+                                <button
+                                    type="button"
+                                    onClick={() => setSearchInput('')}
+                                    className="text-slate-400 hover:text-slate-600 text-xs px-0.5"
+                                    title="Clear search"
+                                >
+                                    ✕
+                                </button>
+                            )}
+                            {!isLoading && masterContracts.length > 0 && (
+                                <span className="text-xs text-green-600 font-bold" title={`${masterContracts.length} contracts loaded`}>
+                                    ✓
+                                </span>
+                            )}
+                        </div>
+
+                        {/* Selected Symbol Display */}
+                        {selectedSymbol.symbol && (
+                            <div className="text-xs text-blue-600 font-semibold mt-0.5">
+                                ✓ {selectedSymbol.symbol}
+                            </div>
+                        )}
+
+                        {/* Dropdown List */}
+                        {showDropdown && masterContracts.length > 0 && (
+                            <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-300 rounded shadow-lg z-40 max-h-48 overflow-y-auto min-w-max">
+                                {filteredContracts.length === 0 ? (
+                                    <div className="px-1 py-2 text-xs text-gray-500 text-center">
+                                        No symbols found for "{searchInput}"
                                     </div>
-                                ))}
+                                ) : (
+                                    <>
+                                        {/* Header with count */}
+                                        <div className="text-xs text-gray-600 px-1 py-0.5 border-b bg-slate-50 sticky top-0 font-semibold">
+                                            Found {filteredContracts.length} symbol{filteredContracts.length !== 1 ? 's' : ''}
+                                        </div>
+                                        {/* Items */}
+                                        {filteredContracts.map((contract) => (
+                                            <div
+                                                key={contract.id}
+                                                onMouseDown={(e) => {
+                                                    e.preventDefault();
+                                                    handleSymbolSelect(contract);
+                                                }}
+                                                className="px-1 py-1 hover:bg-blue-100 cursor-pointer text-xs border-b border-slate-100 flex justify-between items-center group transition-colors"
+                                            >
+                                                <span className="font-semibold">{contract.symbol}</span>
+                                                <div className="flex gap-1 items-center">
+                                                    {contract.expiry && (
+                                                        <span className="text-gray-500 text-xs">{contract.expiry}</span>
+                                                    )}
+                                                    <span className="text-green-600 font-bold group-hover:text-green-700">
+                                                        {contract.lotsize}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </>
+                                )}
                             </div>
                         )}
                     </div>

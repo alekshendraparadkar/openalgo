@@ -713,7 +713,15 @@ def modify_order_endpoint():
 def master_contracts():
     """
     Fetch master contracts with optional filtering
-    Query params: exchange, segment, expiry, instrumenttype
+    Query params: exchange, expiry, instrumenttype
+
+    Instrumenttype mapping (frontend → database):
+    - EQUITY → EQ
+    - FUTURE → FUT
+    - OPTION → CE, PE
+    - INDEX → INDEX
+    - CURRENCY → (native currency codes)
+    - COMMODITY → (native commodity codes)
     """
     try:
         # Get filters from query params
@@ -726,9 +734,25 @@ def master_contracts():
             extra={
                 "exchange": exchange,
                 "expiry": expiry,
-                "instrumenttype": instrumenttype,
+                "instrumenttype_frontend": instrumenttype,
             },
         )
+
+        # Map frontend instrument types to database values
+        # Database stores: EQ (equity), FUT (future), CE/PE (options), INDEX (indices), etc.
+        instrumenttype_mapping = {
+            "EQUITY": ["EQ"],
+            "FUTURE": ["FUT"],
+            "OPTION": ["CE", "PE"],
+            "INDEX": ["INDEX"],
+        }
+
+        db_instrumenttypes = []
+        if instrumenttype and instrumenttype in instrumenttype_mapping:
+            db_instrumenttypes = instrumenttype_mapping[instrumenttype]
+            logger.info(
+                f"[MASTER CONTRACTS] Mapped frontend instrumenttype '{instrumenttype}' to database values: {db_instrumenttypes}"
+            )
 
         # Build query
         query = db_session.query(SymToken)
@@ -737,8 +761,9 @@ def master_contracts():
             query = query.filter(SymToken.exchange == exchange)
         if expiry:
             query = query.filter(SymToken.expiry == expiry)
-        if instrumenttype:
-            query = query.filter(SymToken.instrumenttype == instrumenttype)
+        if db_instrumenttypes:
+            # Use IN clause to match any of the mapped database values
+            query = query.filter(SymToken.instrumenttype.in_(db_instrumenttypes))
 
         contracts = query.all()
 
@@ -921,11 +946,11 @@ def place_order():
 
         # Import broker-specific place_order function
         broker_order_functions = dynamic_import(
-            broker, "api.order_api", ["place_order"]
+            broker, "api.order_api", ["place_order_api"]
         )
         if not broker_order_functions:
             logger.error(
-                f"[PLACE ORDER] Failed to import place_order for broker {broker}"
+                f"[PLACE ORDER] Failed to import place_order_api for broker {broker}"
             )
             return (
                 jsonify(
@@ -938,7 +963,7 @@ def place_order():
             )
 
         try:
-            success, response = broker_order_functions["place_order"](
+            success, response = broker_order_functions["place_order_api"](
                 order_request, AUTH_TOKEN
             )
 
